@@ -11,6 +11,7 @@
 "Полное типизированное состояние приложения - AppState"
 "Потокобезопасный менеджер данных - DataManager"
 
+import math
 from __future__ import annotations
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import datetime, timezone
@@ -50,6 +51,7 @@ class ArrayParameters(Enum):
     freq_hz: float = field(default=0.0)        # Частота (Гц)
     wavelength_m: float = field(default=0.0)   # Длина волны (м)
     wavelength_mm: float = field(default=0.0)  # Длина волны (мм)
+    wave_k: float = field(default=0.0)         # Волновое число k=2π/λ (рад/м)
 
     def __post_init__(self) -> None:
         # Формулы перенесены из MATLAB CalcDN.m:
@@ -58,6 +60,7 @@ class ArrayParameters(Enum):
         self.freq_hz = (6.5 + (self.liter - 1) * 2.01) * 1e9
         self.wavelength_m = self.c_light / self.freq_hz
         self.wavelength_mm = self.wavelength_m * 1000.0
+        self.wave_k = 2.0 * math.pi / self.wavelength_m
 
 
 @dataclass
@@ -283,6 +286,7 @@ class DataManager:
                 section_obj.freq_hz = (6.5 + (section_obj.liter - 1) * 2.01) * 1e9
                 section_obj.wavelength_m = section_obj.c_light_m_s / section_obj.freq_hz
                 section_obj.wavelength_mm = section_obj.wavelength_m * 1000.0
+                section_obj.wave_k = 2.0 * math.pi / section_obj.wavelength_m
 
         if notify:
             self._emit(f"state.{section}", section_obj)
