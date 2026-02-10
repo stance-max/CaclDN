@@ -6,6 +6,7 @@
 "Тип амплитудного распределения - ARType"
 "Тип фазового распределения - PRType"
 "Параметры амлитудно-фазового распределения - AFRParameters"
+"Ключевые массивы расчета и сохранения результатов - CalculationArrays"
 "Флаги визуализации и построения графиков - PlotFlags"
 "Полное типизированное состояние приложения - AppState"
 "Потокобезопасный менеджер данных - DataManager"
@@ -43,7 +44,7 @@ class ArrayParameters(Enum):
     yb: float = 37.0        # Ширина опорных балок по Y, мм
         # ---- Частотные параматры ----
     liter: int = 41                            # Номер литеры
-    c_light_m_s: float = 3e8                   # Скорость света (м/с)
+    c_light: float = 3e8                   # Скорость света (м/с)
 
     # Частота/длина волны как переменные
     freq_hz: float = field(default=0.0)        # Частота (Гц)
@@ -55,7 +56,7 @@ class ArrayParameters(Enum):
         # freq = (6.5 + (lit-1)*2.01) * 10^9
         # lamda = (c_light/freq) * 1000  [в мм]
         self.freq_hz = (6.5 + (self.liter - 1) * 2.01) * 1e9
-        self.wavelength_m = self.c_light_m_s / self.freq_hz
+        self.wavelength_m = self.c_light / self.freq_hz
         self.wavelength_mm = self.wavelength_m * 1000.0
 
 
@@ -139,7 +140,32 @@ class AFRParameters:
     amplitude_file_path: str = ""         # Путь к файлу амплитудного распределения
     phase_file_path: str = ""             # Путь к файлу фазового распределения
 
+@dataclass(slots=True)
+class CalculationArrays:
+    """Ключевые массивы расчёта и сохранения результатов.
 
+    Все поля допускают numpy-массивы/списки; тип оставлен `Any`,
+    чтобы не ограничивать формат хранения на этапе миграции.
+    """
+
+    # Координаты решётки
+    xkord: Any = None          # Xkord
+    ykord: Any = None          # Ykord
+
+    # Амплитудные данные
+    amplitude: Any = None      # Am
+    mask: Any = None           # Mask
+
+    # Фазовые распределения в радианах
+    phase_rad: Any = None      # phase (rad)
+    phase_rx_rad: Any = None   # phaseRx (rad)
+    phase_ry_rad: Any = None   # phaseRy (rad)
+
+    # Фазовые распределения в градусах
+    phase_deg: Any = None      # phase (deg)
+    phase_rx_deg: Any = None   # phaseRx (deg)
+    phase_ry_deg: Any = None   # phaseRy (deg)
+    
 @dataclass(slots=True)
 class PlotFlags:
     "Флаги визуализации и построения графиков"
@@ -156,23 +182,28 @@ class PlotFlags:
 @dataclass(slots=True)
 class AppState:
     """Полное типизированное состояние приложения.
+
     Секции:
     - array: параметры антенной решётки;
     - pattern: параметры расчёта ДН;
     - afr: параметры АФР;
     - plots: флаги отображения;
+    - calc_arrays: ключевые массивы расчёта/сохранения;
     - results: результаты вычислений (аналог MATLAB Res.*);
     - runtime: временные данные рабочего сеанса.
     """
+
     array: ArrayParameters = field(default_factory=ArrayParameters)
     pattern: PatternParameters = field(default_factory=PatternParameters)
     afr: AFRParameters = field(default_factory=AFRParameters)
     plots: PlotFlags = field(default_factory=PlotFlags)
+    calc_arrays: CalculationArrays = field(default_factory=CalculationArrays)
     results: Dict[str, Any] = field(default_factory=dict)
     runtime: Dict[str, Any] = field(default_factory=dict)
- 
- # Колбек подписки: key изменения, новое value, ссылка на DataManager.
-Subscriber = Callable[[str, Any, "DataManager"], None]   
+
+
+# Колбек подписки: key изменения, новое value, ссылка на DataManager.
+Subscriber = Callable[[str, Any, "DataManager"], None]
 
 
 class DataManager:
@@ -250,7 +281,7 @@ class DataManager:
             # частоты/длины волны как обычные переменные.
             if section == "array":
                 section_obj.freq_hz = (6.5 + (section_obj.liter - 1) * 2.01) * 1e9
-                section_obj.wavelength = section_obj.c_light_m_s / section_obj.freq_hz
+                section_obj.wavelength_m = section_obj.c_light_m_s / section_obj.freq_hz
                 section_obj.wavelength_mm = section_obj.wavelength_m * 1000.0
 
         if notify:
@@ -267,6 +298,23 @@ class DataManager:
         """Получить результат по имени."""
         with self._lock:
             return self._state.results.get(name, default)
+
+    def set_calc_array(self, name: str, value: Any, *, notify: bool = True) -> None:
+        """Сохранить ключевой расчётный массив по имени поля `calc_arrays`."""
+        with self._lock:
+            if not hasattr(self._state.calc_arrays, name):
+                raise AttributeError(f"Unknown calc array field: {name}")
+            setattr(self._state.calc_arrays, name, value)
+        if notify:
+            self._emit(f"calc_arrays.{name}", value)
+
+    def get_calc_array(self, name: str, default: Any = None) -> Any:
+        """Получить ключевой массив по имени поля `calc_arrays`."""
+        with self._lock:
+            if not hasattr(self._state.calc_arrays, name):
+                return default
+            value = getattr(self._state.calc_arrays, name)
+            return default if value is None else value
 
     # ----------------------------- Подписки -------------------------------
     def subscribe(self, key: str, callback: Subscriber) -> None:
@@ -316,6 +364,7 @@ class DataManager:
             pattern=PatternParameters(**state_raw.get("pattern", {})),
             afr=_afr_from_dict(state_raw.get("afr", {})),
             plots=PlotFlags(**state_raw.get("plots", {})),
+            calc_arrays=CalculationArrays(**state_raw.get("calc_arrays", {})),
             results=state_raw.get("results", {}),
             runtime=state_raw.get("runtime", {}),
         )
@@ -380,12 +429,3 @@ def _afr_from_dict(payload: Dict[str, Any]) -> AFRParameters:
     if "phase_type" in normalized and not isinstance(normalized["phase_type"], PRType):
         normalized["phase_type"] = PRType(normalized["phase_type"])
     return AFRParameters(**normalized)
-
-        
-    
-
-
-
-
-
-
