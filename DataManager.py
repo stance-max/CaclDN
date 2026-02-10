@@ -1,18 +1,21 @@
-"Централизованное хранение данных"
-"Содержание:"
-"Тип геометрии расположения излучателей - GridType"
-"Параметры антенной решетки - ArrayParameters"
-"Параметры диаграммы направленности - PatternParameters"
-"Тип амплитудного распределения - ARType"
-"Тип фазового распределения - PRType"
-"Параметры амлитудно-фазового распределения - AFRParameters"
-"Ключевые массивы расчета и сохранения результатов - CalculationArrays"
-"Флаги визуализации и построения графиков - PlotFlags"
-"Полное типизированное состояние приложения - AppState"
-"Потокобезопасный менеджер данных - DataManager"
+from __future__ import annotations
+
+"""Централизованное хранение данных.
+
+Содержание:
+- Тип геометрии расположения излучателей - GridType
+- Параметры антенной решетки - ArrayParameters
+- Параметры диаграммы направленности - PatternParameters
+- Тип амплитудного распределения - ARType
+- Тип фазового распределения - PRType
+- Параметры амлитудно-фазового распределения - AFRParameters
+- Ключевые массивы расчета и сохранения результатов - CalculationArrays
+- Флаги визуализации и построения графиков - PlotFlags
+- Полное типизированное состояние приложения - AppState
+- Потокобезопасный менеджер данных - DataManager
+"""
 
 import math
-from __future__ import annotations
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -31,18 +34,18 @@ class GridType(str, Enum):
 
 
 @dataclass
-class ArrayParameters(Enum):
+class ArrayParameters:
     "Параметры антенной решетки"
         # ---- Геометрические параметры ----
     grid_type: GridType = GridType.HEXAGONAL    # Выбор типа расположения сетки 
     nxe: int = 256          # Кол-во эл-тов по Х
     nye: int = 128          # Кол-во эл-тов по Y
-    dx: float = 17.7        # Шаг решетки по X, мм
-    dy: float = 20.4        # Шаг решетки по Y, мм
+    dx: float = 0.0177      # Шаг решетки по X, м
+    dy: float = 0.0204      # Шаг решетки по Y, м
     nxb: int = 3            # Кол-во опорных балок по Х
     nyb: int = 0            # Кол-во опорных балок по Y
-    xb: float = 37.0        # Ширина опорных балок по Х, мм
-    yb: float = 37.0        # Ширина опорных балок по Y, мм
+    xb: float = 0.037       # Ширина опорных балок по Х, м
+    yb: float = 0.037       # Ширина опорных балок по Y, м
         # ---- Частотные параматры ----
     liter: int = 41                            # Номер литеры
     c_light: float = 3e8                   # Скорость света (м/с)
@@ -56,7 +59,7 @@ class ArrayParameters(Enum):
     def __post_init__(self) -> None:
         # Формулы перенесены из MATLAB CalcDN.m:
         # freq = (6.5 + (lit-1)*2.01) * 10^9
-        # lamda = (c_light/freq) * 1000  [в мм]
+        # lamda_m = c_light/freq  [в м]
         self.freq_hz = (6.5 + (self.liter - 1) * 2.01) * 1e9
         self.wavelength_m = self.c_light / self.freq_hz
         self.wavelength_mm = self.wavelength_m * 1000.0
@@ -133,7 +136,7 @@ class AFRParameters:
     ar_dop: float = 0.0
 
     # FRdop1/FRdop2 из ChoseFR.m: смысл зависит от phase_type:
-    # - CIRCULAR, SPHERICAL: fr_dop1 = R (мм)
+    # - CIRCULAR, SPHERICAL: fr_dop1 = R (м)
     # - PYRAMIDAL, QUASI_FIBONACCI, QUADRATIC, PRIME_NUMBERS:
     #       fr_dop1 = ddx (град), fr_dop2 = ddy (град)
     fr_dop1: float = 0.0
@@ -284,7 +287,7 @@ class DataManager:
             # частоты/длины волны как обычные переменные.
             if section == "array":
                 section_obj.freq_hz = (6.5 + (section_obj.liter - 1) * 2.01) * 1e9
-                section_obj.wavelength_m = section_obj.c_light_m_s / section_obj.freq_hz
+                section_obj.wavelength_m = section_obj.c_light / section_obj.freq_hz
                 section_obj.wavelength_mm = section_obj.wavelength_m * 1000.0
                 section_obj.wave_k = 2.0 * math.pi / section_obj.wavelength_m
 
