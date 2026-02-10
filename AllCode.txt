@@ -1,0 +1,2814 @@
+AFR.m
+
+function AFR
+global Window tabgroup tab btngroup btn popup hAxes Txt panel
+global Ed Res phase phaseRx phaseRy Am DirectName tit titf lit
+
+Th0=Res.Settings.Th0;
+Ph0=Res.Settings.Ph0;
+Nx=Res.Settings.Nx;
+Ny=Res.Settings.Ny;
+dx=Res.Settings.dx;
+dy=Res.Settings.dy;
+Nxbalk=Res.Settings.NxBalka;
+Nybalk=Res.Settings.NyBalka;
+xb=Res.Settings.xBalka;
+yb=Res.Settings.yBalka;
+Xkord=Res.Settings.Xkord;
+Ykord=Res.Settings.Ykord;
+Lx=Nx*dx; Ly=Ny*dy;
+freq = (6.5+(lit-1)*2.01)*10^9;
+c_light = 3*10^8;
+lamda = c_light/freq*1000;
+krasp=2*pi/lamda;
+b=Nxbalk*xb;
+k=(Nx:-1:1)'; 
+l=(Ny:-1:1)';
+
+%% Амплитудное распределение
+a=str2num(get(Ed.ParAFR.ARdop,'String')); Txt.Title.AR='';
+switch get(popup.ChsAR,'Value')
+ case 1 % Равномерное
+   A=a*ones(Ny,Nx);
+   Txt.Title.AR=['Равномерное АР'];
+ case 2 % cos на пьедестале
+   ax = 0.1; ay = 0.1;
+   A = a+(1-a)*cos(Xkord * pi / ((Nx-1)*dx+b)).* cos(Ykord*pi/(Ny-0.5)/dy);
+   Txt.Title.AR=['Косинудальное АР (a=',num2str(a),')'];
+ case 3 % Дольф-Чебушев
+   A=chebwin(Ny(1),a)*(chebwin(Nx(1),a))';
+   Txt.Title.AR=['АР Дольф-Чебышев (a=',num2str(a),')'];
+ case 4 % Окно Ханна
+   A=0.5*(1-cos(2*pi*(l-1)/Ny))*0.5*(1-cos(2*pi*(k-1)/Nx))';
+   Txt.Title.AR='АР окно Ханна';
+ case 5 % Окно Хэмминга
+   A=(0.53836-0.46164*cos(2*pi*l/Ny))*(0.53836-0.41646*cos(2*pi*k/Nx))';
+   Txt.Title.AR='АР окно Хэмминга';
+ case 6 % Окно Блэкмана (a=0.16 для УБЛ -58 дБ)
+   A=((1-a)/2-0.5*cos(2*pi.*l/Ny)+0.5*a*cos(4*pi.*l/Ny))*((1-a)/2-0.5*cos(2*pi.*k/Nx)+0.5*a*cos(4*pi.*k/Nx));
+   Txt.Title.AR=['АР окно Блэкмана (a=',num2str(a),')'];
+ case 7 % Окно Кайзера (4<beta<9)
+   if a>50, beta=0.1102*(a-8.7);
+   else if a>=21, beta=0.5842*(a-21)^0.4+0.07886*(a-21);
+        else beta=0;      
+        end
+   end
+   A=kaiser(Ny,beta)*(kaiser(Nx,beta))'; 
+   Txt.Title.AR=['АР окно Кайзера. (УПБЛ=',num2str(a),')'];
+ case 8 % Из файла
+   A = xlsread([DirectName.AR.Way,DirectName.AR.Name]);
+   Txt.Title.AR=DirectName.AR.Name;
+end
+
+% Маска
+switch get(popup.ChMask,'Value')
+    case 1 %Все полотно.
+        Vkl=1;  
+
+    case 2 % файл
+        Vkl = xlsread([DirectName.Mask.Way,DirectName.Mask.Name]);
+        if ~isequal(size(Vkl),size(A))
+        warndlg('Ошибка считывания РВ');
+        end
+    
+    case 3 %64 центральных БП, для ракетных лучей
+     Vkl = zeros(128,256);
+     Vkl(:,[gn(2,64) gn(3,64)]) = 1;
+end
+Res.Settings.Mask = Vkl;
+ 
+Adb=-20*log10(A);
+Aten_db=Adb-mod(Adb,0.9);
+%   Adb_cmr=-0.9*round(Adb/(-0.9)); % коды аттенюаттора
+A1=10.^(-Aten_db/20);
+Am=Vkl.*A;
+
+%% Фазовое распределение
+Txt.Title.FR='';
+switch get(popup.ChFR,'Value')
+  case 1 % Равномерное
+    Phs=zeros(Ny,Nx);
+    Txt.Title.FR=['Равномерное ФР'];
+  case 2 % Круговое
+    R=str2double(get(Ed.ParAFR.FRdop1,'String'));
+    FF=180*(-1+randi(2,Ny/2,Nx/2)); 
+    Phs=cat(2,flip(cat(1,FF,flip(FF,1)),2),cat(1,FF,flip(FF,1)));
+    for ix=1:Nx
+      for iy=1:Ny
+        if sqrt((Xkord(iy,ix))^2+(Ykord(iy,ix))^2)<R phase(iy,ix)=0;
+        end
+      end
+    end
+    Txt.Title.FR=['ФР круг радиуса ',num2str(R),' мм'];
+  case 3 % Пирамидальное
+    ddx=str2double(get(Ed.ParAFR.FRdop1,'String')); 
+    ddy=str2double(get(Ed.ParAFR.FRdop2,'String')); 
+    Phs=abs(Xkord/dx)*ddx+abs(Ykord/dy)*ddy; 
+    Txt.Title.FR=['ФР пирамидальное спадающее. ddx=',num2str(ddx),', ddy=',...
+    num2str(ddy),'град'];
+  case 4 % Сферическое
+    R=str2double(get(Ed.ParAFR.FRdop1,'String')); 
+    FF=180*(-1+randi(2,Ny/2,Nx/2)); 
+    Phs=cat(2,flip(cat(1,FF,flip(FF,1)),2),cat(1,FF,flip(FF,1)));
+    for ix=1:Nx
+      for iy=1:Ny
+        if sqrt((Xkord(iy,ix))^2+(Ykord(iy,ix))^2)<R 
+            Phs(iy,ix)=360*(R-sqrt(R^2-(Xkord(iy,ix))^2-(Ykord(iy,ix))^2))/lamda;
+        end
+      end
+    end
+    Txt.Title.FR=['ФР спадающее в виде сферы R=',num2str(R)];
+  case 5 % Квизифибоначи
+    F6=zeros(Ny/2,Nx/2);
+    ddx=str2double(get(Ed.ParAFR.FRdop1,'String')); 
+    ddy=str2double(get(Ed.ParAFR.FRdop2,'String')); 
+    a=zeros(1,Nx/2); %Вводится нижняя левая четверть распределения:
+    for i=1:(Nx/2-1)
+      a(1)=0; a(i+1)=a(i)+ddx*i;
+    end
+    b=zeros(1,Ny/2);
+    b(1)=0;
+    for i=1:Ny/2
+      b(i+1)=b(i)+ddy*i;
+      F6(i,:)=b(i)+a;
+    end
+    F61=cat(1,flip(F6,1),F6); % Правая половина распределения
+    Phs=cat(2, flip(F61,2),F61);  % Распределение по всем излучателям
+    Txt.Title.FR='ФР "квазифибоначчи"'; 
+  case 6 % Квадратическое
+    ddx=str2double(get(Ed.ParAFR.FRdop1,'String')); 
+    ddy=str2double(get(Ed.ParAFR.FRdop2,'String')); 
+    Phs=((Xkord/Lx).^2*ddx+(Ykord/Ly).^2*ddy)*360; 
+    Txt.Title.FR=['ФР квадратичная. ddx=',num2str(ddx),', ddy=',...
+    num2str(ddy),'град'];
+  case 7 % Простые числа
+    ddx=str2double(get(Ed.ParAFR.FRdop1,'String')); 
+    ddy=str2double(get(Ed.ParAFR.FRdop2,'String')); 
+    Nprime=primes(1000);
+    str1=Nprime(1:Nx/2)*ddx;
+    colum1=Nprime(1:Ny/2)*ddy;
+    sector1=ones(Ny/2,1)*str1+colum1'*ones(1,Nx/2);
+    sector2=[flip(sector1,2) sector1];
+    Phs=[flip(sector2); sector2];
+    Txt.Title.FR=['ФР простые числа. ddx=',num2str(ddx),', ddy=',...
+    num2str(ddy),'град'];
+  case 8 % Из файла
+    Phs = xlsread([DirectName.FR.Way,DirectName.FR.Name]);
+%     Txt.Title.FR=['ФР из файла: ',hData.nameF];
+
+end
+
+phase_o = zeros(Ny,Nx); % фазовый сдвиг по отклонению
+if Th0 ~= 0 || Ph0 ~= 0
+phase_o = -krasp*(Xkord*sind(Th0)+Ykord*sind(Ph0));
+end;
+
+Phs_deg=(Phs)+rad2deg(phase_o);
+% phase=deg2rad(Phs_deg);
+ph_code=round(Phs_deg/5.625);
+phase=deg2rad(ph_code*5.625);
+Res.Settings.PhaseDeg=mod((ph_code*5.625),360);
+
+phaseRx=phase; phaseRy=phase;
+for m=1:Ny
+    for n=1:Nx
+        if n>Nx/2 phaseRx(m,n)=phase(m,n)+pi; end;
+end; end;
+for m=1:Ny
+    for n=1:Nx
+        if m>Ny/2 phaseRy(m,n)=phase(m,n)+pi; end;
+end; end;
+
+function val=gn(i,num) 
+%считывает индексы для i-го массива из num элементов 
+val=(i-1)*num+1:i*num;
+end
+end
+
+
+
+CalcDN.m
+
+%до ускорения и отладки шаг 1гр и 16на16 эл-тов оптимально 
+
+clc
+tic
+
+
+%% Глобал
+global Window tabgroup tab btngroup btn popup hAxes Txt panel
+global Ed Res phase phaseRx phaseRy Am DirectName tit titf lit
+
+%% Ком окно
+wb = waitbar(0,'Please wait...');
+steps = 2;
+for step = 1:steps
+    % computations take place here
+    waitbar(step / steps)
+end
+
+%% Параметры отображения 
+% (0-выкл; 1-вкл)
+% open_2d=1;        %график сечений XOZ/YOZ
+% open_peling=0;    %пелингационное направление
+% open_3d=0;          %график 3Д ДН 
+% open_sech=0;      %произвольное сечение плоскостью фи
+% open_grSetkaIzl=0;  %график сетки излучателей
+% open_grAR=0;      %график АР
+% open_grFR=0;      %график ФР
+open_SKO=1;
+
+%% Параметры решетки
+%сетка излучателей: 0-прямоугольная; 1-гексогональная
+if abs(get(btn.ReshType.Geks,'Value'))==1 gekso=1;
+elseif abs(get(btn.ReshType.Rect,'Value'))==1  gekso=0; end; 
+
+Nx = str2double(get(Ed.Resh.Nx,'String')); 
+Ny = str2double(get(Ed.Resh.Ny,'String'));   %кол-во эл-тов ОХ/ОУ
+dx = str2double(get(Ed.Resh.dx,'String'));    
+dy = str2double(get(Ed.Resh.dy,'String'));   %шаг между эл-ми по ОХ/ОУ
+Nxbalk = str2double(get(Ed.Resh.BalkaX,'String'));
+xb = str2double(get(Ed.Resh.BalkaDx,'String')); %кол-во балок крепеления между ПБ и ширина по ОХ
+Nybalk = str2double(get(Ed.Resh.BalkaY,'String'));     
+yb = str2double(get(Ed.Resh.BalkaDy,'String'));    %кол-во балок крепеления между ПБ и ширина по ОУ
+lit = str2double(get(Ed.Resh.Lit,'String')); % литера
+freq = (6.5+(lit-1)*2.01)*10^9;
+c_light = 3*10^8;
+lamda = (c_light/freq)*1000;
+
+%% Параметры ДН
+Th0 = str2double(get(Ed.ParDN.Th0,'String')); 
+Ph0 = str2double(get(Ed.ParDN.Ph0,'String')); %отклонения луча, гр
+ThMin = str2double(get(Ed.ParDN.ThMin,'String'));    
+ThMax = str2double(get(Ed.ParDN.ThMax,'String')); %диапозон отображения по тета
+PhMin = 0;   PhMax = 360;  %диапозон отображения по фи 
+step2d = str2double(get(Ed.ParDN.Step2D,'String')); %шаг двумерной ДН, гр
+step3d = str2double(get(Ed.ParDN.Step3D,'String')); %шаг трехмерной ДН, гр
+alpha = str2double(get(Ed.ParDN.Alpha,'String')); %плоскость сечения, гр
+
+%% АР
+  %вид АР ('0' - 0/1; '1' - дБ)
+% if abs(get(btn.ParAFR.ArDB,'Value')) == 1 par_AmDB = 1; 
+% elseif abs(get(btn.ParAFR.Ar10,'Value')) == 1 par_AmDB = 0; end;
+
+%% Запись
+Res.Settings.Th0=Th0;
+Res.Settings.Ph0=Ph0;
+Res.Settings.Nx=Nx;
+Res.Settings.Ny=Ny;
+Res.Settings.dx=dx;
+Res.Settings.dy=dy;
+Res.Settings.NxBalka=Nxbalk;
+Res.Settings.NyBalka=Nybalk;
+Res.Settings.xBalka=xb;
+Res.Settings.yBalka=yb;
+Res.Settings.Step2D=step2d;
+Res.Settings.Step3D=step3d;
+Res.Settings.ThMax=ThMax;
+Res.Settings.ThMin=ThMin;
+Res.Settings.Litera=lit;
+
+%% Константы
+j=sqrt(-1);             %мнимая единица
+krasp=2*pi/lamda;      %постоянная распостранения (волновое число)
+
+%**********************************************************************************************************************************************************
+%% АФР
+Xkord = (KordSetkaOX(Nx, Ny, dx, Nxbalk, xb));  % коорд сетка ОХ
+Ykord = (KordSetkaOY(gekso, Nx, Ny, dy, Nybalk, yb )); % коорд сетка ОУ
+
+Res.Settings.Xkord = Xkord;
+Res.Settings.Ykord = Ykord;
+
+if get(btn.SetGrid,'Value') == 1
+    hold on; axes(hAxes.Grid); plot(Xkord,Ykord, '.r'); hold on; 
+    title('Координатная сетка излучателей'); xlabel('X, мм'); 
+    ylabel('Y,мм'); hold off; hold off;
+end;
+
+AFR
+
+% выбор АФР  
+% switch get(popup.ChsAFR,'Value')
+%     case 1 % равномерное
+%      Am=ones(Ny,Nx);  phase=zeros(Ny,Nx); tit='Равномерное';
+%     
+%     case 2 % ПРД 120
+%      Load_Am='F:\ДН_моделинг\АнтРеш15\Массивы\Верная калибровка по фазе\PRD_a_120.txt';
+%      Load_Phase='F:\ДН_моделинг\АнтРеш15\Массивы\Верная калибровка по фазе\PRD_phase_120.txt';
+%      Am=load(Load_Am); phase=load(Load_Phase);
+%      phase=deg2rad(phase); krAR=78; tit='PRD 120';
+% %      if par_AmDB==1 Am(find(Am<krAR))=0; Am(find(Am>=krAR))=1; end;
+%      if par_AmDB==1 Am(find(Am<krAR))=0;
+%      for i=1:Ny for j=1:Nx
+%       if Am(i,j)>krAR Am(i,j)=Am(i,j)/83; end; end; end;
+%      end;
+% 
+%     case 3 %ПРМ 120
+%      Load_Am='F:\ДН_моделинг\АнтРеш15\Массивы\Верная калибровка по фазе\PRM_a_120.txt';
+%      Load_Phase='F:\ДН_моделинг\АнтРеш15\Массивы\Верная калибровка по фазе\PRM_phase_120.txt';
+%      Am=load(Load_Am); phase=load(Load_Phase);
+%      phase=deg2rad(phase); krAR=68; tit='PRM 120';
+% %      if par_AmDB==1 Am(find(Am<krAR))=0; Am(find(Am>=krAR))=1; end;
+%      if par_AmDB==1 Am(find(Am<krAR))=0;
+%      for i=1:Ny for j=1:Nx
+%       if Am(i,j)>krAR Am(i,j)=Am(i,j)/73; end; end; end;
+%      end;
+%     
+%     case 4 %ПРД 35
+%      Load_Am='F:\ДН_моделинг\АнтРеш15\Массивы\Ошибочная калибровка по фазе\PRD_a_35.txt';
+%      Load_Phase='F:\ДН_моделинг\АнтРеш15\Массивы\Ошибочная калибровка по фазе\PRD_phase_35.txt';   
+%      Am=load(Load_Am); phase=load(Load_Phase);
+%      phase=deg2rad(phase); krAR=78; tit='PRD 35';
+% %      if par_AmDB==1 Am(find(Am<krAR))=0; Am(find(Am>=krAR))=1; end;
+%      if par_AmDB==1 Am(find(Am<krAR))=0;
+%      for i=1:Ny for j=1:Nx
+%       if Am(i,j)>krAR Am(i,j)=Am(i,j)/83; end; end; end;
+%      end;
+%     
+%     case 5 %ПРМ 35
+%      Load_Am='F:\ДН_моделинг\АнтРеш15\Массивы\Ошибочная калибровка по фазе\PRM_a_35.txt';
+%      Load_Phase='F:\ДН_моделинг\АнтРеш15\Массивы\Ошибочная калибровка по фазе\PRM_phase_35.txt';
+%      Am=load(Load_Am); phase=load(Load_Phase);
+%      phase=deg2rad(phase); krAR=68; tit='PRM 35';
+% %      if par_AmDB==1 Am(find(Am<krAR))=0; Am(find(Am>=krAR))=1; end;
+%      if par_AmDB==1 Am(find(Am<krAR))=0;
+%      for i=1:Ny for j=1:Nx
+%       if Am(i,j)>krAR Am(i,j)=Am(i,j)/73; end; end; end;
+%      end;
+% end;
+% 
+% % -- Расчет фазового сдвига по отклонению, рад --
+% phase_o = zeros(Ny,Nx);
+% if Th0 ~= 0 || Ph0 ~= 0
+% phase_o = -krasp*(Xkord*sind(Th0)*cosd(Ph0)+Ykord*sind(Th0)*sind(Ph0));
+% end;
+% 
+% % phase_o=mod(phase_o,2*pi);  % треуг вид (убираем кратные 2pi)
+% phase=phase_o+phase;
+% 
+% %Расчет ФР для разностных ДН, рад
+% phaseRx=phase; phaseRy=phase;
+% for m=1:Ny
+%     for n=1:Nx
+%         if n>Nx/2 phaseRx(m,n)=phase(m,n)+pi; end;
+% end; end;
+% for m=1:Ny
+%     for n=1:Nx
+%         if m>Ny/2 phaseRy(m,n)=phase(m,n)+pi; end;
+% end; end;
+% 
+% % ddFx=pi*cat(2,zeros(Ny,Nx/2),ones(Ny,Nx/2)); %для задания разностной ДН налк
+% % ddFy=pi*cat(1,zeros(Ny/2,Nx),ones(Ny/2,Nx)); %для задания разностной ДН верт            
+% % phaseRx=phase+ddFx; phaseRy=phase+ddFy;
+
+if get(btn.AFR.AR,'Value')==1 && get(btn.SetAFR,'Value')==1
+ Nxx=zeros(1,Nx); Nyy=zeros(1,Ny);
+ for i=1:Nx Nxx(i) = i; end;
+ for i=1:Ny Nyy(i) = i; end;
+ hold on; axes(hAxes.AR); hold on; map=[1 0 0; 0 1 0]; surf(Nxx, Nyy, Am); 
+ title(Txt.Title.AR); xlabel('Nx'); ylabel('Ny'); colormap(map); axis([1 Nx 1 Ny]);
+ hold off; hold off;
+end;
+
+if get(btn.AFR.FR,'Value')==1 && get(btn.SetAFR,'Value')==1
+ hold on; axes(hAxes.FR); hold on; colormap("default");
+ surf(Xkord, Ykord, phase); title(Txt.Title.FR); xlabel('X, мм'); ylabel('Y,мм');
+ hold off; hold off;
+end;
+
+% ----- Расчет СКО ------
+% if get(popup.ChsAR,'Value')~=1 && open_SKO==1
+% [i_o, j_o]=find(Am==0);
+% N_ot=size(i_o); N_ot=N_ot(1);
+% Q=N_ot/(Nx*Ny);
+% 
+% Am_Real=Am; Phase_Real=load(Load_Phase);
+% Phase_Real(find(Am_Real==0))=[];
+% Phase_Real=deg2rad(Phase_Real);
+% Am_Real(find(Am_Real==0))=[];
+% 
+% phase1=Phase_Real-pi;
+% phase1=phase1+(phase1<0)*2*pi; % std(phase2(:)) - ско, переделать фазу без выбитых
+% SKO_Phase=(std(phase1))
+% SKO_Phase_deg=rad2deg(SKO_Phase)
+% SKO_Am=std(Am_Real) 
+% SKO_Total=SKO_Am^2+SKO_Phase^2
+% MSSL1=10*log10(abs(SKO_Total/(Nx*Ny*(1-SKO_Total))))
+% MSSL2=10*log10((Q+SKO_Am^2+(1-Q)*SKO_Phase^2)/((1-Q)*Nx*Ny))
+% end;
+
+%% Сечения 2D
+if get(btn.SetSect,'Value')==1
+
+%   FiN0 = (ThMin:step2d:ThMax); FiV0 = (ThMin:step2d:ThMax); % гпу релиз
+%   Xx = sind(FiN0); Yy = sind(FiV0);
+%   xx = sind(Th0)*cosd(Ph0)+0*Xx; yy = sind(Th0)*sind(Ph0)+0*Yy;
+%   N1 = gpuArray(max(size(Xx))); Th = ThMin:step2d:ThMax;
+%   DSx = DNscan(Th,Th,'DSxoz'); DSy = DNscan(Th,Th,'DSyoz');
+%   DSKx = gpuArray(10.^(DSx/20)); DSKy = gpuArray(10.^(DSy/20));
+%   if get(btn.Sect.Sum,'Value')==1 && get(btn.Sect.Rz,'Value')==1 % сум и разн
+%     Sx=zeros(1,N1,'gpuArray'); Rx=gpuArray(zeros(1,N1)); 
+%     Sy=gpuArray(zeros(1,N1)); Ry=gpuArray(zeros(1,N1));
+%     Sx1=gpuArray(zeros(1,N1)); Rx1=gpuArray(zeros(1,N1));
+%     Sy1=gpuArray(zeros(1,N1)); Ry1=gpuArray(zeros(1,N1));
+%     Sx_dB=gpuArray(zeros(1,N1)); Rx_dB=gpuArray(zeros(1,N1));
+%     Sy_dB=gpuArray(zeros(1,N1)); Ry_dB=gpuArray(zeros(1,N1));
+%     for p=1:N1
+%       Sx(1,p)=(sum(sum(Am.*exp(-1i*krasp*(Xx(p)*Xkord+yy(p)*Ykord)-1i*(phase)))));
+%       Rx(1,p)=(sum(sum(Am.*exp(-1i*krasp*(Xx(p)*Xkord+yy(p)*Ykord)-1i*(phaseRx)))));
+%       Sy(1,p)=(sum(sum(Am.*exp(-1i*krasp*(xx(p)*Xkord+Yy(p)*Ykord)-1i*(phase)))));
+%       Ry(1,p)=(sum(sum(Am.*exp(-1i*krasp*(xx(p)*Xkord+Yy(p)*Ykord)-1i*(phaseRy)))));
+%     end
+%     maxDNx=max(abs(Sx)); maxDNy=max(abs(Sy));
+%     [i_maxDNx]=find(abs(Sx)==maxDNx); [i_maxDNy]=find(abs(Sy)==maxDNy);
+%     maxDNx=(abs(Sx(i_maxDNx))*DSKx(i_maxDNx));
+%     maxDNy=(abs(Sy(i_maxDNy))*DSKy(i_maxDNy));
+%     Sx1=(abs(Sx).*DSKx/maxDNx); % норм X с ДС
+%     Rx1=(abs(Rx).*DSKx/maxDNx);
+%     Sx_dB=(20*log10(Sx1)); % X в дБ
+%     Rx_dB=(20*log10(Rx1)); 
+%     KNDx=10*log10(4*pi*dx*dy*Nx*Ny/lamda^2*cosd(Th0));
+%     Sy1=(abs(Sy).*DSKy/maxDNy); % норм Y с ДС
+%     Ry1=(abs(Ry).*DSKy/maxDNy);  
+%     Sy_dB=(20*log10(Sy1)); % Y в дБ
+%     Ry_dB=(20*log10(Ry1));
+%     KNDy=10*log10(4*pi*dx*dy*Nx*Ny/lamda^2*cosd(Th0));
+%     Xx=gather(Xx); Sx_dB=gather(Sx_dB); Yy=gather(Yy); Sy_dB=gather(Sy_dB);
+%     [shSx,ublSx,pblX,pobX]=parametrDN(Xx,Sx_dB,-3);
+%     [shSy,ublSy,pblY,pobY]=parametrDN(Yy,Sy_dB,-3);
+
+%   FiN0=(ThMin:step2d:ThMax); FiV0=(ThMin:step2d:ThMax); % вектор релиз
+%   Xx=sind(FiN0); Yy=sind(FiV0);
+%   xx=sind(Th0)*cosd(Ph0)+0*Xx; yy=sind(Th0)*sind(Ph0)+0*Yy;
+%   N1=max(size(Xx)); 
+%   Th=ThMin:step2d:ThMax;
+%   DSx=DNscan(Th,Th,'DSxoz'); DSy=DNscan(Th,Th,'DSyoz');
+%   DSKx=10.^(DSx/20); DSKy=10.^(DSy/20);
+%   if get(btn.Sect.Sum,'Value')==1 && get(btn.Sect.Rz,'Value')==1 % сум и разн
+%       hx1=Xx; hx2=xx; hx3=hx1; hx4=hx2;
+%       hy1=Yy; hy2=yy; hy3=hy1; hy4=hy2;
+%       hp1=phase; hp2=phaseRx; hp3=hp1; hp4=phaseRy;
+%       hx=mat2cell([hx1;hx2;hx3;hx4],[1 1 1 1]);
+%       hy=mat2cell([hy1;hy2;hy3;hy4],[1 1 1 1]);
+%       hp=mat2cell([hp1;hp2;hp3;hp4],[Ny Ny Ny Ny]);
+%     Stb(p)=arrayfun(@(x)sum(sum(Am.*exp(-1i*krasp*(kron(x.f1,Xkord)+kron(x.f2,Ykord))-1i*x.f3))),(hg(p)),'UniformOutput',false);
+% stb=cellfun(@(x,y,z)sum(sum(Am.*exp(-1i*krasp*(kron(x,Xkord)+kron(y,Ykord))-1i*z))),hx,hy,hp);
+% Sx=Stb(1); Sy=Stb(2); Rx=Stb(3); Ry=Stb(4);
+
+% FiN0=(ThMin:step2d:ThMax); FiV0=(ThMin:step2d:ThMax);
+%   Xx=sind(FiN0); Yy=sind(FiV0);
+%   xx=sind(Th0)*cosd(Ph0)+0*Xx; yy=sind(Th0)*sind(Ph0)+0*Yy;
+%   N1=max(size(Xx)); 
+  
+  Th=ThMin:step2d:ThMax;
+  fix=Th; fiy=Th;
+  Xx=sind(fix); Yy=sind(fiy);
+  xx=sind(Th0)+0*Yy; yy=sind(Ph0)+0*Xx;
+  N1=max(size(Xx));
+
+  %DSx=DNscan(Th,Th,'DSxoz'); DSy=DNscan(Th,Th,'DSyoz');
+  %DSKx=10.^(DSx/20); DSKy=10.^(DSy/20);
+  if get(btn.Sect.Sum,'Value')==1 && get(btn.Sect.Rz,'Value')==1 % сум и разн
+    Sx=zeros(1,N1); Rx=(zeros(1,N1)); 
+    Sy=(zeros(1,N1)); Ry=(zeros(1,N1));
+    Sx1=(zeros(1,N1)); Rx1=(zeros(1,N1));
+    Sy1=(zeros(1,N1)); Ry1=(zeros(1,N1));
+    Sx_dB=(zeros(1,N1)); Rx_dB=(zeros(1,N1));
+    Sy_dB=(zeros(1,N1)); Ry_dB=(zeros(1,N1));
+    parfor p=1:N1
+      Sx(1,p)=sum(sum(Am.*exp(-1i*krasp*(Xx(p)*Xkord+yy(p)*Ykord)-1i*(phase))));
+      Rx(1,p)=sum(sum(Am.*exp(-1i*krasp*(Xx(p)*Xkord+yy(p)*Ykord)-1i*(phaseRx))));
+      Sy(1,p)=sum(sum(Am.*exp(-1i*krasp*(xx(p)*Xkord+Yy(p)*Ykord)-1i*(phase))));
+      Ry(1,p)=sum(sum(Am.*exp(-1i*krasp*(xx(p)*Xkord+Yy(p)*Ykord)-1i*(phaseRy))));
+    end
+    maxDNx=max(abs(Sx)); maxDNy=max(abs(Sy));
+    [i_maxDNx]=find(abs(Sx)==maxDNx); [i_maxDNy]=find(abs(Sy)==maxDNy);
+    if length(i_maxDNx)>1 i_maxDNx=i_maxDNx(1); end
+    if length(i_maxDNy)>1 i_maxDNy=i_maxDNy(1); end
+    maxDNx=(abs(Sx(i_maxDNx))*DSKx(i_maxDNx));
+    maxDNy=(abs(Sy(i_maxDNy))*DSKy(i_maxDNy));
+    Sx1=abs(Sx).*DSKx/maxDNx; % норм X с ДС
+    Rx1=abs(Rx).*DSKx/maxDNx;
+    Sx_dB=20*log10(Sx1); % X в дБ
+    Rx_dB=20*log10(Rx1); 
+    KNDx=10*log10(4*pi*dx*dy*Nx*Ny/lamda^2*cosd(Th0));
+    Sy1=abs(Sy).*DSKy/maxDNy; % норм Y с ДС
+    Ry1=abs(Ry).*DSKy/maxDNy;  
+    Sy_dB=20*log10(Sy1); % Y в дБ
+    Ry_dB=20*log10(Ry1);
+    KNDy=10*log10(4*pi*dx*dy*Nx*Ny/lamda^2*cosd(Th0));
+    [shSx,ublSx,pblX,pobX]=parametrDN(Xx,Sx_dB,-3);
+    [shSy,ublSy,pblY,pobY]=parametrDN(Yy,Sy_dB,-3);
+    if open_SKO==1
+    peakX=findpeaks(Sx_dB); peak0=[0];
+    peakX=setdiff(peakX,peak0);
+    SKX=round(rms(peakX),2)
+    peakY=findpeaks(Sy_dB); peak0=[0];
+    peakY=setdiff(peakY,peak0);
+    SKY=round(rms(peakY),2)
+    end;
+
+  elseif get(btn.Sect.Sum,'Value')==1 % только суммарная
+    Sx=zeros(1,N1); Sy=(zeros(1,N1)); Sx1=(zeros(1,N1)); Sy1=(zeros(1,N1));
+    Sx_dB=(zeros(1,N1)); Sy_dB=(zeros(1,N1));
+    parfor p=1:N1
+      Sx(1,p)=sum(sum(Am.*exp(-1i*krasp*(Xx(p)*Xkord+yy(p)*Ykord)-1i*(phase))));
+      Sy(1,p)=sum(sum(Am.*exp(-1i*krasp*(xx(p)*Xkord+Yy(p)*Ykord)-1i*(phase))));
+    end;
+    maxDNx=max(abs(Sx)); maxDNy=max(abs(Sy));
+    [i_maxDNx]=find(abs(Sx)==maxDNx); [i_maxDNy]=find(abs(Sy)==maxDNy);
+    if length(i_maxDNx)>1 i_maxDNx=i_maxDNx(1); end
+    if length(i_maxDNy)>1 i_maxDNy=i_maxDNy(1); end
+    
+    % для ДН с учетом ДС
+    %maxDNx=(abs(Sx(i_maxDNx))*DSKx(i_maxDNx)); 
+    %maxDNy=(abs(Sy(i_maxDNy))*DSKy(i_maxDNy));
+    %Sx1=abs(Sx).*DSKx/maxDNx; Sx_dB=20*log10(Sx1);
+    %Sy1=abs(Sy).*DSKy/maxDNy; Sy_dB=20*log10(Sy1);
+    
+    %  для множителя решетки
+    Sx1=abs(Sx)/maxDNx; Sx_dB=20*log10(Sx1);    
+    Sy1=abs(Sy)/maxDNy; Sy_dB=20*log10(Sy1);
+    
+    % MNresh=20*log10(Sx/Sx(i_maxDNx));
+    % fig6=figure
+    % MN=axes('Parent',fig6,'Color',[1 1 1],'Units','Normalized','FontSize',10);
+    % plot(asind(Xx), MNresh,'r','LineWidth',1);
+
+%     if round(Xx(i_maxDNx)/(sind(Th0)*cosd(Ph0)))==1
+%         maxDNx=(abs(Sx(i_maxDNx))*DSKx(i_maxDNx));
+%     else
+%         Sx0=abs(Sx); Sx0(find(Sx0==max(abs(Sx))))=[];
+%         maxDNx=max(Sx0)*();
+%     end;
+%     if round(Yy(i_maxDNy)/(sind(Th0)*sind(Ph0)))==1
+%         maxDNy=(abs(Sy(i_maxDNy))*DSKy(i_maxDNy));
+%     else
+%         Sy0=abs(Sy); Sy0(find(Sy0==max(abs(Sy).*DSKy)))=[];
+%         maxDNy=max(Sy0);
+%     end;
+%     Sx1=abs(Sx).*DSKx/max(max(abs(Sx).*DSKx)); % норм X с ДС
+%     Sy1=abs(Sy).*DSKy/max(max(abs(Sy).*DSKy)); % норм Y с ДС
+    
+    %KNDx=10*log10(4*pi*dx*dy/lamda^2*max(abs(Sx).*DSKx)*cosd(Th0));
+    %KNDy=10*log10(4*pi*dx*dy/lamda^2*max(abs(Sy).*DSKy)*cosd(Th0));
+    KNDx=10*log10(4*pi*dx*dy/lamda^2*max(abs(Sx))*cosd(Th0));
+    KNDy=10*log10(4*pi*dx*dy/lamda^2*max(abs(Sy))*cosd(Th0));
+
+    Xx=gather(Xx); Sx_dB=gather(Sx_dB); Yy=gather(Yy); Sy_dB=gather(Sy_dB);
+    [shSx,ublSx,pblX,pobX]=parametrDN(Xx,Sx_dB,-3);
+    [shSy,ublSy,pblY,pobY]=parametrDN(Yy,Sy_dB,-3);
+    if open_SKO==1
+    peakX=findpeaks(Sx_dB); peak0=[0];
+    peakX=setdiff(peakX,peak0);
+    SKX=round(rms(peakX),2)
+    peakY=findpeaks(Sy_dB); peak0=[0];
+    peakY=setdiff(peakY,peak0);
+    SKY=round(rms(peakY),2)
+    end;
+    
+  elseif get(btn.Sect.Rz,'Value')==1 % только разностная
+    Rx=zeros(1,N1); Ry=(zeros(1,N1)); Rx1=(zeros(1,N1)); Ry1=(zeros(1,N1));
+    Rx_dB=(zeros(1,N1)); Ry_dB=(zeros(1,N1));
+    parfor p=1:N1
+      Sx(1,p)=sum(sum(Am.*exp(-1i*krasp*(Xx(p)*Xkord+yy(p)*Ykord)-1i*(phase))));
+      Sy(1,p)=sum(sum(Am.*exp(-1i*krasp*(xx(p)*Xkord+Yy(p)*Ykord)-1i*(phase))));
+      Rx(1,p)=sum(sum(Am.*exp(-1i*krasp*(Xx(p)*Xkord+yy(p)*Ykord)-1i*(phaseRx))));
+      Ry(1,p)=sum(sum(Am.*exp(-1i*krasp*(xx(p)*Xkord+Yy(p)*Ykord)-1i*(phaseRy))));
+    end;
+    maxDNx=max(abs(Sx)); maxDNy=max(abs(Sy));
+    [i_maxDNx]=find(abs(Sx)==maxDNx); [i_maxDNy]=find(abs(Sy)==maxDNy);
+    if length(i_maxDNx)>1 i_maxDNx=i_maxDNx(1); end
+    if length(i_maxDNy)>1 i_maxDNy=i_maxDNy(1); end
+    maxDNx=(abs(Sx(i_maxDNx))*DSKx(i_maxDNx));
+    maxDNy=(abs(Sy(i_maxDNy))*DSKy(i_maxDNy));
+    Rx1=abs(Rx).*DSKx/maxDNx; % норм X с ДС
+    Ry1=abs(Ry).*DSKy/maxDNy; % норм Y с ДС
+    Rx_dB=20*log10(Rx1); % X в дБ
+    Ry_dB=20*log10(Ry1); % Y в дБ
+  end;
+
+
+  %% ПХ
+  if get(btn.SetPelCh,'Value')==1
+      CalcPH
+  end
+
+%% Пел напралвение
+  if get(btn.Sect.SetPeling,'Value')==1 && get(btn.Sect.Rz,'Value')==1 ...
+     && get(btn.Sect.Sum,'Value')==1
+    p=find(round(asind(Xx),2)==ThMin); m=find(round(asind(Xx),2)==ThMax);
+%                   ----- Плоскость XOZ -----
+    A1=1; PelSx_kd=-999; PelSx_gr=-999; PelSx_dB=-999;
+    MAXDN=max(max(Sx_dB)); MAXKORD=find(Sx_dB==MAXDN);
+    MAXGR=asind(Xx(MAXKORD));
+    if (round(sind(Th0)*cosd(Ph0),6)==0) && abs(MAXGR)<=shSx/10
+      PelSx_kd=MAXKORD; PelSx_gr=MAXGR; PelSx_dB=MAXDN; 
+    elseif (sind(Th0)*cosd(Ph0))~=0 && MAXGR==0 A1=0;
+    elseif (round(sind(Th0)*cosd(Ph0),6)==0) && MAXGR~=0 A1=0;
+    elseif (sind(Th0)*cosd(Ph0))~=0
+      KR=round(deg2rad(MAXGR)/(sind(Th0)*cosd(Ph0)));
+      if KR==1
+        PelSx_kd=MAXKORD; PelSx_gr=MAXGR; PelSx_dB=MAXDN;
+      else
+        uy=MAXDN;  Sx_dB(MAXKORD)=-9999;  MAXDN=max(max(Sx_dB));
+        f=find(Sx_dB==MAXDN);  Sx_dB(MAXKORD)=uy;  MAXKORD=f; 
+        MAXGR=asind(Xx(MAXKORD)); clear uy;
+        if (round(sind(Th0)*cosd(Ph0),6)==0) && abs(MAXGR)<=shSx/10
+            PelSx_kd=MAXKORD; PelSx_gr=MAXGR; PelSx_dB=MAXDN; 
+        elseif (sind(Th0)*cosd(Ph0))~=0 && MAXGR==0 A1=0;
+        elseif (round(sind(Th0)*cosd(Ph0),6)==0) && MAXGR~=0 A1=0;
+        elseif (sind(Th0)*cosd(Ph0))~=0
+            KR=round(deg2rad(MAXGR)/(sind(Th0)*cosd(Ph0)));
+            if KR==1
+              PelSx_kd=MAXKORD; PelSx_gr=MAXGR; PelSx_dB=MAXDN;
+            else A1=0; end;
+        end;
+      end;
+    end
+          
+% -- Разностная XOZ пелинг --
+    B1=1; PelRx_kd=-999; PelRx_gr=-999; PelRx_dB=-999;
+    if A1==0 B1=0; else SUMKORD=PelSx_kd; end;
+    if p<SUMKORD && m>SUMKORD
+      MAXDN1=-99999; MAXDN2=-99999;
+      MAXKORD1=PelSx_kd; MAXKORD2=PelSx_gr; schet=0;
+      for i=flip(f:SUMKORD)
+        if (schet<=0) && (Rx_dB(i)>MAXDN1) && (Rx_dB(i-1)<Rx_dB(i))...
+            && (Rx_dB(i)>=Rx_dB(i+1))
+              schet=schet+1; MAXDN1=Rx_dB(i); MAXKORD1=i;
+        end;
+      end;
+      if MAXKORD1==SUMKORD B1=0; end;
+      schet=0;
+      for i=SUMKORD:m
+        if (schet<=0) && (Rx_dB(i)>MAXDN2) && (Rx_dB(i-1)<Rx_dB(i))...
+           && (Rx_dB(i)>=Rx_dB(i+1))
+             schet=schet+1; MAXDN2=Rx_dB(i); MAXKORD2=i;
+        end;
+      end;
+      if MAXKORD2==SUMKORD B1=0; end;
+      if MAXDN1>=MAXDN2 MINRZ=MAXDN1; else MINRZ=MAXDN2; end;
+      for i=MAXKORD1:MAXKORD2
+        if Rx_dB(i)<MINRZ 
+            MINRZ=Rx_dB(i); MINGR=asind(Xx(i)); MINKORD=i; end;
+      end;
+      if (round(sind(Th0)*cosd(Ph0),6)==0) && abs(MINGR)<=shSx/10
+        PelRx_kd=MINKORD; PelRx_gr=MINGR; PelRx_dB=MINRZ;
+      elseif (sind(Th0)*cosd(Ph0))~=0 && MINGR==0 B1=0;
+      elseif (round(sind(Th0)*cosd(Ph0),6)==0)&& MINGR~=0 B1=0;
+      elseif (sind(Th0)*cosd(Ph0))~=0
+        KR=round(deg2rad(MINGR)/(sind(Th0)*cosd(Ph0)));
+        if KR==1 PelRx_kd=MINKORD; PelRx_gr=MINGR; PelRx_dB=MINRZ; 
+        else B1=0; end;
+      end;
+    end;
+    clear MAXDN MAXGR MAXKORD f SUMKORD MAXDN1 MAXDN2 MAXKORD1 MAXKORD2...
+          schet MINRZ MINGR MINKORD KR
+
+%                   ----- Плоскость YOZ -----
+% -- Суммарная YOZ пелинг --
+   A2=1; PelSy_kd=-999; PelSy_gr=-999; PelSy_dB=-999;
+   MAXDN=max(max(Sy_dB)); MAXKORD=find(Sy_dB==MAXDN); 
+   MAXGR=asind(Yy(MAXKORD));
+   if (round(sind(Th0)*sind(Ph0),6)==0) && abs(MAXGR)<=shSy/10
+     PelSy_kd=MAXKORD; PelSy_gr=MAXGR; PelSy_dB=MAXDN; 
+   elseif (sind(Th0)*sind(Ph0))~=0 && MAXGR==0 A2=0;
+   elseif (round(sind(Th0)*sind(Ph0),6)==0) && MAXGR~=0 A2=0;
+   elseif (sind(Th0)*sind(Ph0))~=0
+     KR=round(deg2rad(MAXGR)/(sind(Th0)*sind(Ph0)));
+     if KR==1
+       PelSy_kd=MAXKORD; PelSy_gr=MAXGR; PelSy_dB=MAXDN;
+     else
+       uy=MAXDN;  Sy_dB(MAXKORD)=-9999;  MAXDN=max(max(Sy_dB));
+       f=find(Sy_dB==MAXDN);  Sy_dB(MAXKORD)=uy;  MAXKORD=f; 
+       MAXGR=asind(Yy(MAXKORD)); clear uy;
+       if (round(sind(Th0)*sind(Ph0),6)==0) && abs(MAXGR)<=shSy/10
+         PelSy_kd=MAXKORD; PelSy_gr=MAXGR; PelSy_dB=MAXDN; 
+       elseif (sind(Th0)*sind(Ph0))~=0 && MAXGR==0 A2=0;
+       elseif (round(sind(Th0)*sind(Ph0),6)==0) && MAXGR~=0 A2=0;
+       elseif (sind(Th0)*sind(Ph0))~=0
+         KR=round(deg2rad(MAXGR)/(sind(Th0)*sind(Ph0)));
+         if KR==1
+           PelSy_kd=MAXKORD; PelSy_gr=MAXGR; PelSy_dB=MAXDN;
+         else A1=0; end;
+       end;
+     end;
+   end;
+
+% -- Разностная YOZ пелинг --
+   B2=1; PelRy_kd=-999; PelRy_gr=-999; PelRy_dB=-999;
+   if A1==0 B2=0; else SUMKORD=PelSy_kd; end;
+   if p<SUMKORD && m>SUMKORD
+     MAXDN1=-99999; MAXDN2=-99999;
+     MAXKORD1=PelSy_kd; MAXKORD2=PelSy_gr; schet=0;
+     for i=flip(f:SUMKORD)
+       if (schet<=0) && (Ry_dB(i)>MAXDN1) && (Ry_dB(i-1)<Ry_dB(i))...
+           && (Ry_dB(i)>=Ry_dB(i+1))
+         schet=schet+1; MAXDN1=Ry_dB(i); MAXKORD1=i;
+       end;
+     end;
+     if MAXKORD1==SUMKORD B2=0; end;
+     schet=0;
+     for i=SUMKORD:m
+       if (schet<=0) && (Ry_dB(i)>MAXDN2) && (Ry_dB(i-1)<Ry_dB(i))...
+               && (Ry_dB(i)>=Ry_dB(i+1))
+         schet=schet+1; MAXDN2=Ry_dB(i); MAXKORD2=i;
+       end;
+     end;
+     if MAXKORD2==SUMKORD B2=0; end;
+     if MAXDN1>=MAXDN2 MINRZ=MAXDN1; else MINRZ=MAXDN2; end;
+     for i=MAXKORD1:MAXKORD2
+       if Ry_dB(i)<MINRZ MINRZ=Ry_dB(i); MINGR=asind(Yy(i)); MINKORD=i; 
+       end;
+     end;
+     if (round(sind(Th0)*sind(Ph0),6)==0)&&abs(MINGR)<=shSx/10
+       PelRy_kd=MINKORD; PelRy_gr=MINGR; PelRy_dB=MINRZ;
+     elseif (sind(Th0)*sind(Ph0))~=0 && MINGR==0 B2=0; 
+     elseif (round(sind(Th0)*sind(Ph0),6)==0)&& MINGR~=0 B2=0;
+     elseif (sind(Th0)*sind(Ph0))~=0
+       KR=round(deg2rad(MINGR)/(sind(Th0)*sind(Ph0)));
+       if KR==1 PelRy_kd=MINKORD; PelRy_gr=MINGR; PelRy_dB=MINRZ; else B2=0; end;
+     end;
+   end;
+   clear MAXDN MAXGR MAXKORD f SUMKORD MAXDN1 MAXDN2 MAXKORD1 MAXKORD2...
+         schet MINRZ MINGR MINKORD KR m p i 
+  end;
+%% Графики сечений
+if get(btn.Sect.Sum,'Value')==1 && get(btn.Sect.Rz,'Value')==1 % сум и разн
+  hold on; axes(hAxes.XOZ);
+  plot(asind(Xx), Sx_dB,'r','LineWidth',1); hold on; 
+  plot(asind(Xx), Rx_dB,'-.','Color',[0 0.7 0],'LineWidth',0.6); 
+  grid minor; xlabel('\phi_н [°]');  legend('Сум','Раз');
+  ylabel('Мощность [дБ]'); axis([-90 90 -50 1]);  set(gca,'Xtick', -90:10:90);
+  tit=['Наклонная плоскость, \phi_н_0=', num2str(Th0,5) char(176),...
+      ', \phi_в_0=', num2str(Ph0,5) char(176)]; title(tit);
+    if get(btn.Sect.SetPeling,'Value')==1 
+     set(Txt.XOZ.PelTxt,'String', ['Пеленгационное направление']);
+     if A1==1 
+       Txt.XOZ.ssx1 = ['Суммарная:'];  
+       Txt.XOZ.ssx2 = [' индекс: ' num2str(PelSx_kd,5) ];
+       Txt.XOZ.ssx3 = [' градус: ' num2str(PelSx_gr,4) char(176)]; 
+       Txt.XOZ.ssx4 = [' уровень: ' num2str(PelSx_dB,4) ' дБ'];
+       set(Txt.XOZ.PelS, 'String', {Txt.XOZ.ssx1,Txt.XOZ.ssx2,Txt.XOZ.ssx3,Txt.XOZ.ssx4});
+       plot(PelSx_gr, PelSx_dB,'*r');
+     else
+       set(Txt.XOZ.PelS, 'String', 'Не найдено');
+     end;
+     if B1==1
+       Txt.XOZ.ssx5 = ['Разностная:'];
+       Txt.XOZ.ssx6 = [' индекс: ' num2str(PelRx_kd,5)]; 
+       Txt.XOZ.ssx7 = [' градус: ' num2str(PelRx_gr,4) char(176)]; 
+       Txt.XOZ.ssx8 = [' уровень: ' num2str(PelRx_dB,4) ' дБ'];
+       set(Txt.XOZ.PelR, 'String', {Txt.XOZ.ssx5,Txt.XOZ.ssx6,Txt.XOZ.ssx7,Txt.XOZ.ssx8});
+       plot(PelRx_gr, PelRx_dB,'*b');
+     else
+       set(Txt.XOZ.PelR, 'String', 'Не найдено');
+     end;
+  end;
+  hold off; hold off;  
+ 
+  hold on; axes(hAxes.YOZ);
+  plot(asind(Yy), Sy_dB,'r','LineWidth',1); hold on; 
+  plot(asind(Yy), Ry_dB,'-.','Color',[0 0.7 0],'LineWidth',0.6);  
+  grid minor; xlabel('\phi_в [°]'); legend('Сум','Раз'); 
+  ylabel('Мощность [дБ]'); axis([-90 90 -50 1]); set(gca,'Xtick', -90:10:90);
+    tit=['Вертикальная плоскость, \phi_н_0=', num2str(Th0,5) char(176),...
+      ', \phi_в_0=', num2str(Ph0,5) char(176)]; title(tit);
+  if get(btn.Sect.SetPeling,'Value')==1 
+     set(Txt.YOZ.PelTxt,'String', ['Пеленгационное направление']);
+     if A2==1 
+       Txt.YOZ.ssy1 = ['Суммарная:'];  
+       Txt.YOZ.ssy2 = [' индекс: ' num2str(PelSy_kd,5) ];
+       Txt.YOZ.ssy3 = [' градус: ' num2str(PelSy_gr,4) char(176)]; 
+       Txt.YOZ.ssy4 = [' уровень: ' num2str(PelSy_dB,4) ' дБ'];
+       set(Txt.YOZ.PelS, 'String', {Txt.YOZ.ssy1,Txt.YOZ.ssy2,Txt.YOZ.ssy3,Txt.YOZ.ssy4});
+       plot(PelSy_gr, PelSy_dB,'*r');
+     else
+       set(Txt.YOZ.PelS, 'String', 'Не найдено');
+     end;
+     if B2==1
+       Txt.YOZ.ssy5 = ['Разностная:'];
+       Txt.YOZ.ssy6 = [' индекс: ' num2str(PelRy_kd,5)]; 
+       Txt.YOZ.ssy7 = [' градус: ' num2str(PelRy_gr,4) char(176)]; 
+       Txt.YOZ.ssy8 = [' уровень: ' num2str(PelRy_dB,4) ' дБ'];
+       set(Txt.YOZ.PelR, 'String', {Txt.YOZ.ssy5,Txt.YOZ.ssy6,Txt.YOZ.ssy7,Txt.YOZ.ssy8});
+       plot(PelRy_gr, PelRy_dB,'*b');
+     else
+       set(Txt.YOZ.PelR, 'String', 'Не найдено');
+     end;
+  end; 
+  hold off; hold off; 
+
+  set(Txt.XOZ.Width,'String',['Ширина луча: ' num2str(shSx,3) char(176)]); 
+  set(Txt.XOZ.KND,'String',['КНД: ' num2str(abs(KNDx),4) ' дБ']);
+  set(Txt.XOZ.UBL,'String',['УБЛ: ' num2str(ublSx,4) ' дБ']); 
+  set(Txt.XOZ.FBLL, 'String', ['ПБЛ_L: ' num2str(pblX(1,1),4) ' дБ; ' num2str(pblX(1,2),4) char(176)]);
+  set(Txt.XOZ.FBLR, 'String', ['ПБЛ_R: ' num2str(pblX(2,1),4) ' дБ; ' num2str(pblX(2,2),4) char(176)]);
+  Txt.XOZ.sx1=['ПОБ L:'];
+  Txt.XOZ.sx2=['уровень: ' num2str(pobX(1,1),4) ' дБ;'];
+  Txt.XOZ.sx3=['градус: ' num2str(pobX(1,2),4) char(176) ';'];
+  Txt.XOZ.sx4=['индекс: ' num2str(pobX(1,3),5) '.' ];
+  Txt.XOZ.sx5=['ПОБ R:'];
+  Txt.XOZ.sx6=['уровень: ' num2str(pobX(2,1),4) ' дБ;'];
+  Txt.XOZ.sx7=['градус: ' num2str(pobX(2,2),4) char(176) ';'];
+  Txt.XOZ.sx8=['индекс: ' num2str(pobX(2,3),5) '.' ];
+  set(Txt.XOZ.PoBLL,'string', {Txt.XOZ.sx1,Txt.XOZ.sx2,Txt.XOZ.sx3,Txt.XOZ.sx4});
+  set(Txt.XOZ.PoBLR,'string', {Txt.XOZ.sx5,Txt.XOZ.sx6,Txt.XOZ.sx7,Txt.XOZ.sx8});
+
+  set(Txt.YOZ.Width,'String',['Ширина луча: ' num2str(shSy,3) char(176)]);
+  set(Txt.YOZ.KND,'String',['КНД: ' num2str(abs(KNDy),4) ' дБ']);
+  set(Txt.YOZ.UBL,'String',['УБЛ: ' num2str(ublSy,4) ' дБ']);
+  set(Txt.YOZ.FBLL, 'String', ['ПБЛ_L: ' num2str(pblY(1,1),4) ' дБ; ' num2str(pblY(1,2),4) char(176)]);
+  set(Txt.YOZ.FBLR, 'String', ['ПБЛ_R: ' num2str(pblY(2,1),4) ' дБ; ' num2str(pblY(2,2),4) char(176)]);
+  Txt.YOZ.sy1=['ПОБ L:'];
+  Txt.YOZ.sy2=['уровень: ' num2str(pobY(1,1),4) ' дБ;'];
+  Txt.YOZ.sy3=['градус: ' num2str(pobY(1,2),4) char(176) ';'];
+  Txt.YOZ.sy4=['индекс: ' num2str(pobY(1,3),5) '.' ];
+  Txt.YOZ.sy5=['ПОБ R:'];
+  Txt.YOZ.sy6=['уровень: ' num2str(pobY(2,1),4) ' дБ;'];
+  Txt.YOZ.sy7=['градус: ' num2str(pobY(2,2),4) char(176) ';'];
+  Txt.YOZ.sy8=['индекс: ' num2str(pobY(2,3),5) '.' ];
+  set(Txt.YOZ.PoBLL,'string', {Txt.YOZ.sy1,Txt.YOZ.sy2,Txt.YOZ.sy3,Txt.YOZ.sy4});
+  set(Txt.YOZ.PoBLR,'string', {Txt.YOZ.sy5,Txt.YOZ.sy6,Txt.YOZ.sy7,Txt.YOZ.sy8});
+ 
+
+elseif get(btn.Sect.Sum,'Value')==1
+  hold on; axes(hAxes.XOZ); plot(asind(Xx), Sx_dB,'r','LineWidth',1); hold on; 
+  grid minor; xlabel('\phi_н[°]'); legend('Сум'); 
+  ylabel('Мощность [дБ]'); axis([-90 90 -50 1]); set(gca,'Xtick', -90:10:90);
+  tit=['Наклонная плоскость, \phi_н_0=', num2str(Th0,5) char(176),...
+      ', \phi_в_0=', num2str(Ph0,5) char(176)]; title(tit);
+  hold off; hold off; 
+
+  hold on; axes(hAxes.YOZ); plot(asind(Yy), Sy_dB,'r','LineWidth',1); hold on;
+  grid minor; xlabel('\phi_в [°]'); legend('Сум'); 
+  ylabel('Мощность [дБ]'); axis([-90 90 -50 1]); set(gca,'Xtick', -90:10:90);
+  tit=['Вертикальная плоскость, \phi_н_0=', num2str(Th0,5) char(176),...
+      ', \phi_в_0=', num2str(Ph0,5) char(176)]; title(tit);
+  hold off; hold off;
+
+  set(Txt.XOZ.Width,'String',['Ширина луча: ' num2str(shSx,3) char(176)]); 
+  set(Txt.XOZ.KND,'String',['КНД: ' num2str(abs(KNDx),4) ' дБ']);
+  set(Txt.XOZ.UBL,'String',['УБЛ: ' num2str(ublSx,4) ' дБ']); 
+  set(Txt.XOZ.FBLL, 'String', ['ПБЛ_L: ' num2str(pblX(1,1),4) ' дБ; '...
+      num2str(pblX(1,2),4) char(176)]);
+  set(Txt.XOZ.FBLR, 'String', ['ПБЛ_R: ' num2str(pblX(2,1),4) ' дБ; '...
+      num2str(pblX(2,2),4) char(176)]);
+  Txt.XOZ.sx1=['ПОБ L:'];
+  Txt.XOZ.sx2=['уровень: ' num2str(pobX(1,1),4) ' дБ;'];
+  Txt.XOZ.sx3=['градус: ' num2str(pobX(1,2),4) char(176) ';'];
+  Txt.XOZ.sx4=['индекс: ' num2str(pobX(1,3),5) '.' ];
+  Txt.XOZ.sx5=['ПОБ R:'];
+  Txt.XOZ.sx6=['уровень: ' num2str(pobX(2,1),4) ' дБ;'];
+  Txt.XOZ.sx7=['градус: ' num2str(pobX(2,2),4) char(176) ';'];
+  Txt.XOZ.sx8=['индекс: ' num2str(pobX(2,3),5) '.' ];
+  set(Txt.XOZ.PoBLL,'string', {Txt.XOZ.sx1,Txt.XOZ.sx2,Txt.XOZ.sx3,Txt.XOZ.sx4});
+  set(Txt.XOZ.PoBLR,'string', {Txt.XOZ.sx5,Txt.XOZ.sx6,Txt.XOZ.sx7,Txt.XOZ.sx8});
+
+  set(Txt.YOZ.Width,'String',['Ширина луча: ' num2str(shSy,3) char(176)]);
+  set(Txt.YOZ.KND,'String',['КНД: ' num2str(abs(KNDy),4) ' дБ']);
+  set(Txt.YOZ.UBL,'String',['УБЛ: ' num2str(ublSy,4) ' дБ']);
+  set(Txt.YOZ.FBLL, 'String', ['ПБЛ_L: ' num2str(pblY(1,1),4) ' дБ; ' num2str(pblY(1,2),4) char(176)]);
+  set(Txt.YOZ.FBLR, 'String', ['ПБЛ_R: ' num2str(pblY(2,1),4) ' дБ; ' num2str(pblY(2,2),4) char(176)]);
+  Txt.YOZ.sy1=['ПОБ L:'];
+  Txt.YOZ.sy2=['уровень: ' num2str(pobY(1,1),4) ' дБ;'];
+  Txt.YOZ.sy3=['градус: ' num2str(pobY(1,2),4) char(176) ';'];
+  Txt.YOZ.sy4=['индекс: ' num2str(pobY(1,3),5) '.' ];
+  Txt.YOZ.sy5=['ПОБ R:'];
+  Txt.YOZ.sy6=['уровень: ' num2str(pobY(2,1),4) ' дБ;'];
+  Txt.YOZ.sy7=['градус: ' num2str(pobY(2,2),4) char(176) ';'];
+  Txt.YOZ.sy8=['индекс: ' num2str(pobY(2,3),5) '.' ];
+  set(Txt.YOZ.PoBLL,'string', {Txt.YOZ.sy1,Txt.YOZ.sy2,Txt.YOZ.sy3,Txt.YOZ.sy4});
+  set(Txt.YOZ.PoBLR,'string', {Txt.YOZ.sy5,Txt.YOZ.sy6,Txt.YOZ.sy7,Txt.YOZ.sy8});
+
+elseif get(btn.Sect.Rz,'Value')==1
+  axes(hAxes.XOZ); plot(asind(Xx), Rx_dB,'b'); hold on;
+  grid minor; title('Наклонная плоскость'); xlabel('\phi_н [°]') 
+  legend('Разн'); ylabel('Мощность [дБ]'); axis([-90 90 -50 1]);
+  set(gca,'Xtick', -90:10:90); plot(asind(Yy), Ry_dB,'g');
+  tit=['Наклонная плоскость, \phi_н_0=', num2str(Th0,5) char(176),...
+      ', \phi_в_0=', num2str(Ph0,5) char(176)]; title(tit);
+  hold off; 
+  
+  axes(hAxes.YOZ); plot(asind(Yy), Ry_dB,'k'); hold on;
+  grid minor; xlabel('\phi_в [°]') 
+  legend('Разн'); ylabel('Мощность [дБ]'); axis([-90 90 -50 1]);
+  set(gca,'Xtick', -90:10:90); plot(asind(Yy), Ry_dB,'g');
+  tit=['Вертикальная плоскость, \phi_н_0=', num2str(Th0,5) char(176),...
+      ', \phi_в_0=', num2str(Ph0,5) char(176)]; title(tit);
+  hold off; 
+end; 
+end;
+
+%% СУММ 3D
+% -- Расчет ДН --
+if get(btn.Set3D,'Value')==1
+M = round(360/pi/(step3d))+1;
+m=1:M;
+x=1*(-1+(2*m-1)/M);
+y=1*(-1+(2*m-1)/M);
+[X,Y]=meshgrid(x,y);
+krug=(1+sign(1-abs(X.^2+Y.^2)))/2;
+DS3d = DNscan(asind(X),asind(Y),'DS3d');
+K3D=10.^(DS3d/20); 
+if get(btn.D3.Sum,'Value')==1
+    S3D=(zeros(M,M)); 
+%     k=(1:1:M); n=(1:1:M);
+%     S3D(n,k)=abs(sum(sum(Am.*exp(-1i*krasp*(x(k)*Xkord+y(n)*Ykord)-1i*phase))));
+
+  parfor n=1:M
+    for k=1:M
+        if krug(n,k)==1
+        S3D(n,k)=abs(sum(sum(Am.*exp(-1i*krasp*(x(k)*Xkord+y(n)*Ykord)-1i*phase))));
+        end;
+    end;
+  end;
+  [Smax,Ind]=max(S3D(:)); 
+  [yn,xn]=ind2sub(size(S3D),Ind);
+  Sum3D_dB=20*log10(S3D.*K3D/max(max(S3D.*K3D))); % 20*log(abs(S)/max(max(S)));
+  BB=(S3D.*K3D/max(max(S3D.*K3D))).^2./sqrt(1-X.^2-Y.^2);
+  BB(isnan(BB))=0;
+  
+  KND3D=10*log10(pi*M^2/sum(sum(BB)));
+%   KND3Dpred=10*log10(4*pi*dx*dy*Nx*Ny/lamda^2*cosd(Th0));
+
+%   S3Dmax=max(max(Sum3d_dB)); uy=S3Dmax; f=find(Sum3d_dB==S3Dmax); %УБЛ
+%   Sum3d_dB(f)=-9999; S3D_UBL=max(max(Sum3d_dB)); Sum3d_dB(f)=uy; 
+%   clear uy S3Dmax f;
+  
+  hold on; axes(hAxes.S3D);
+  surf(asind(X),asind(Y),Sum3D_dB,'EdgeColor','none'); hold on; 
+  xlabel('\phi_н [°]'); ylabel('\phi_в [°]'); zlabel('Мощность [дБ]');
+  axis([-90 90 -90 90 -60 0]); colormap(jet); colorbar;
+  hAxes.S3D.CLim =[-60 0];
+  tit=['Сумарная ДН 3D, \phi_н_0=', num2str(Th0,5) char(176),...
+      ', \phi_в_0=', num2str(Ph0,5) char(176)]; title(tit); grid minor;
+    if get(btn.Sect.Sum,'Value')==1
+  set(Txt.S3D.WidthX,'String',['Ширина луча XOZ: ' num2str(shSx,3) char(176)]); 
+  set(Txt.S3D.WidthY,'String',['Ширина луча YOZ: ' num2str(shSy,3) char(176)]);
+  set(Txt.S3D.KND,'String',['КНД: ' num2str(abs(KND3D),4) ' дБ']);
+%   set(Txt.S3D.KNDpr,'String',['КНДпред: ' num2str(abs(KND3Dpred),4) ' дБ']);
+%   set(Txt.S3D.UBL,'String',['УБЛ: ' num2str(abs(S3D_UBL),4) ' дБ']);
+    end
+  hold off; hold off;
+end
+
+%% Азимут 3D
+  if get(btn.D3.RzAz,'Value')==1 
+    parfor n=1:M
+      for k=1:M
+        if krug(n,k)==1
+        RzAz(n,k)=abs(sum(sum(Am.*exp(-1i*krasp*(x(k)*Xkord+y(n)*Ykord)-1i*phaseRx))));
+        end;
+      end;
+    end;
+    RzAz_dB=20*log10((RzAz.*K/max(max(S3D.*K)))); 
+    hold on; axes(hAxes.Ra3D);
+    surf(asind(X),asind(Y),RzAz_dB,'EdgeColor','none'); hold on;
+    xlabel('\phi_н [°]'); ylabel('\phi_в [°]'); zlabel('Мощность [дБ]');
+    axis([-100 100 -100 100 -60 0]); colormap(jet); colorbar;
+    hAxes.Ra3D.CLim=[-60 0];
+    tit=['Азимутальная ДН 3D, \phi_н_0=', num2str(Th0,5) char(176),...
+      ', \phi_в_0=', num2str(Ph0,5) char(176)]; title(tit);
+    hold off; hold off;
+
+%% Углов 3D
+  if get(btn.D3.RzEl,'Value')==1
+    parfor n=1:M
+      for k=1:M
+        if krug(n,k)==1
+        RzEl(n,k)=abs(sum(sum(Am.* exp(-1i*krasp*(x(k)*Xkord+y(n)*Ykord)-1i*phaseRy) )));
+        end;
+      end;
+    end;
+    RzEl_dB=20*log10((RzEl.*K/max(max(S3D.*K))));
+    hold on;axes(hAxes.Re3D);
+    surf(asind(X),asind(Y),RzEl_dB,'EdgeColor','none'); hold on;
+    xlabel('\phi_н [°]'); ylabel('\phi_в [°]'); zlabel('Мощность [дБ]');
+    axis([-100 100 -100 100 -60 0]); colormap(jet); colorbar;
+    hAxes.Re3D.CLim=[-60 0];
+    tit=['Угломестная ДН 3D, \phi_н_0=', num2str(Th0,5) char(176),...
+      ', \phi_в_0=', num2str(Ph0,5) char(176)]; title(tit);
+    hold off; hold off;
+  end;
+end;
+end;
+
+%% Запись результатов
+Res.Settings.Amplitude=Am;
+Res.Settings.Phase=phase;
+
+if exist('Xx')==1 Res.Lit.FiN=asind(Xx); else Res.Lit.FiN=[]; end;
+if exist('Yy')==1 Res.Lit.FiV=asind(Yy); else Res.Lit.FiV=[]; end;
+
+if exist('Sx_dB')==1 Res.Lit.XOZ.SUMdb=Sx_dB; else Res.Lit.XOZ.SUMdb=[]; end;
+if exist('Sy_dB')==1 Res.Lit.YOZ.SUMdb=Sy_dB; else Res.Lit.YOZ.SUMdb=[];end;
+
+if exist('Rx_dB')==1 Res.Lit.XOZ.RZdb=Rx_dB; else Res.Lit.XOZ.RZdb=[];end;
+if exist('Ry_dB')==1 Res.Lit.YOZ.RZdb=Ry_dB; else Res.Lit.YOZ.RZdb=[];end;
+
+if exist('Sum3D_dB')==1 Res.Lit.D3.SUMdb=Sum3D_dB;; else Res.Lit.D3.SUMdb=[];end;
+if exist('RzAz_dB')==1 Res.Lit.D3.RzAzdb=RzAz_dB; else Res.Lit.D3.RzAzdb=[];end;
+if exist('RzEl_dB')==1 Res.Lit.D3.RzEldb=RzEl_dB; else Res.Lit.D3.RzEldb=[];end;
+
+if exist('PX')==1 Res.Lit.PelChar=PX; else Res.Lit.PelChar=[];end;
+
+if exist('KND3D')==1 Res.Lit.KND=KND3D; else Res.Lit.KND=[];end;
+
+if exist('shSx')==1 Res.Lit.XOZ.Width=shSx; else Res.Lit.XOZ.Width=[]; end;
+if exist('shSy')==1 Res.Lit.YOZ.Width=shSy; else Res.Lit.YOZ.Width=[]; end;
+
+if exist('ublSx')==1 Res.Lit.XOZ.UBL=ublSx; else Res.Lit.XOZ.UBL=[]; end;
+if exist('ublSy')==1 Res.Lit.YOZ.UBL=ublSy; else Res.Lit.YOZ.UBL=[]; end;
+
+if exist('pblX')==1 Res.Lit.XOZ.FBL_L_db=pblX(1,1); else Res.Lit.XOZ.FBL_L_db=[]; end;
+if exist('pblY')==1 Res.Lit.YOZ.FBL_L_db=pblY(1,1); else Res.Lit.YOZ.FBL_L_db=[]; end;
+if exist('pblX')==1 Res.Lit.XOZ.FBL_L_deg=pblX(1,2); else Res.Lit.XOZ.FBL_L_deg=[]; end;
+if exist('pblY')==1 Res.Lit.YOZ.FBL_L_deg=pblY(1,2); else Res.Lit.YOZ.FBL_L_deg=[]; end;
+
+if exist('pblX')==1 Res.Lit.XOZ.FBL_R_db=pblX(2,1); else Res.Lit.XOZ.FBL_R_db=[]; end;
+if exist('pblY')==1 Res.Lit.YOZ.FBL_R_db=pblY(2,1); else Res.Lit.YOZ.FBL_R_db=[]; end;
+if exist('pblX')==1 Res.Lit.XOZ.FBL_R_deg=pblX(2,2); else Res.Lit.XOZ.FBL_R_deg=[]; end;
+if exist('pblY')==1 Res.Lit.YOZ.FBL_R_deg=pblY(2,2); else Res.Lit.YOZ.FBL_R_deg=[]; end;
+
+if exist('pobX')==1 Res.Lit.XOZ.PoBL_L_db=pobX(1,1); else Res.Lit.XOZ.PoBL_L_db=[]; end;
+if exist('pobY')==1 Res.Lit.YOZ.PoBL_L_db=pobY(1,1); else Res.Lit.YOZ.PoBL_L_db=[]; end;
+if exist('pobX')==1 Res.Lit.XOZ.PoBL_L_deg=pobX(1,2); else Res.Lit.XOZ.PoBL_L_deg=[]; end;
+if exist('pobY')==1 Res.Lit.YOZ.PoBL_L_deg=pobY(1,2); else Res.Lit.YOZ.PoBL_L_deg=[]; end;
+
+if exist('pobX')==1 Res.Lit.XOZ.PoBL_R_db=pobX(2,1); else Res.Lit.XOZ.PoBL_R_db=[]; end;
+if exist('poblY')==1 Res.Lit.YOZ.PoBL_R_db=pobY(2,1); else Res.Lit.YOZ.PoBL_R_db=[]; end;
+if exist('pobX')==1 Res.Lit.XOZ.PoBL_R_deg=pobX(2,2); else Res.Lit.XOZ.PoBL_R_deg=[]; end;
+if exist('pobY')==1 Res.Lit.YOZ.PoBL_R_deg=pobY(2,2); else Res.Lit.YOZ.PoBL_R_deg=[]; end;
+
+if exist('KND3D')==1 Res.Lit.KND=KND3D; else Res.Lit.KND=[]; end;
+
+if exist('PelSx_dB')==1 Res.Lit.XOZ.Pell_SUM_db=PelSx_dB; else Res.Lit.XOZ.Pell_SUM_db=[]; end;
+if exist('PelRx_dB')==1 Res.Lit.XOZ.Pell_RZ_db=PelRx_dB; else Res.Lit.XOZ.Pell_RZ_db=[]; end;
+if exist('PelSy_dB')==1 Res.Lit.YOZ.Pell_SUM_db=PelSy_dB; else Res.Lit.YOZ.Pell_SUM_db=[]; end;
+if exist('PelRy_dB')==1 Res.Lit.YOZ.Pell_RZ_db=PelRy_dB; else Res.Lit.YOZ.Pell_RZ_db=[]; end;
+
+if exist('PelSx_gr')==1 Res.Lit.XOZ.Pell_SUM_deg=PelSx_gr; else Res.Lit.XOZ.Pell_SUM_deg=[]; end;
+if exist('PelRx_gr')==1 Res.Lit.XOZ.Pell_RZ_deg=PelRx_gr; else Res.Lit.XOZ.Pell_RZ_deg=[]; end;
+if exist('PelSy_gr')==1 Res.Lit.YOZ.Pell_SUM_deg=PelSy_gr; else Res.Lit.YOZ.Pell_SUM_deg=[]; end;
+if exist('PelRy_gr')==1 Res.Lit.YOZ.Pell_RZ_deg=PelRy_gr; else Res.Lit.YOZ.Pell_RZ_deg=[]; end;
+
+
+close(wb)
+toc
+
+
+
+
+CalcPH.m
+
+global Window tabgroup tab btngroup btn popup hAxes Txt panel
+global Ed Res phase phaseRx phaseRy Am DirectName tit titf
+
+
+    cuty=(sign(Sy_dB+3)+1)/2;   
+    cutx=(sign(Sx_dB+3)+1)/2;
+    FiN=[]; FiV=[]; phx=[]; phy=[]; %krutx=[]; kruty=[];
+    N0=max(size(Xx));
+FiN0 = str2double(get(Ed.ParDN.Th0,'String')); 
+FiV0 = str2double(get(Ed.ParDN.Ph0,'String'));
+
+ThMin = str2double(get(Ed.ParDN.ThMin,'String'));    
+ThMax = str2double(get(Ed.ParDN.ThMax,'String'));    
+Th=ThMin:step2d:ThMax;
+fix=Th; fiy=Th;
+Xx=sind(fix); Yy=sind(fiy);
+
+%% Наклонная ПХ %%            
+    for t=1:N0  %меньший индекс - первый максимум
+    if cutx(t)==1
+        i1=t; break    
+    end
+    end
+    for t=N0:-1:1 %больший индекс - второй максимум
+    if cutx(t)==1
+        i2=t; break     
+    end
+    end
+    ph = sin(angle(Rx)-angle(Sx)) .* abs(Rx./Sx);
+    phx=ph(i1:i2);
+    [nn,in]=min(Sx_dB(i1:i2)); % минимум
+    ic=in+i1;
+    xc=0.5*(Xx(ic-1)+Xx(ic));
+    yc=sind(FiV0); % центр ПХ
+    FiN=asind(Xx(i1:i2))-FiN0;
+
+d_phx_ind=find(round(phx,2)==0)
+delta_phx=FiN(1,d_phx_ind)
+
+iout=round((i2-i1)/4);   %крутизну по двум точкам +-четверть ширины луча
+i3=i1+iout; i4=i2-iout;
+krutx0=(ph(i4)-ph(i3))/(asind(Xx(i4))-asind(Xx(i3))); 
+
+% cutx=(sign(Rx_dB+3-Rx_dB(ic))+1)/2; %=1 при Sdbx>-3, иначе =0
+% nonx=nonzeros(Xx.*cutx); %остались координаты x, где Sdbx>-3
+% shx=(asind(max(nonx))-asind(min(nonx))); %ширина сумм ДН по уровню -3 дБ в сечении плоскостью x0z
+
+axes(hAxes.PelChN); hold on;
+plot(FiN,phx,'b'); set(gca,'XAxisLocation','origin','YAxisLocation','origin');
+grid minor; xlabel('Град.'); ylabel ('Относ. ед.');
+title({['Наклонная ПХ, \phi_н_0=', num2str(FiN0,5) char(176),...
+      ', \phi_в_0=', num2str(FiV0,5) char(176)];});  hold off;
+set(Txt.PH.Krut_PHx,'String',['Крутизна ПХ: ' num2str(krutx0,4) ' ед/град;']);
+set(Txt.PH.Delta_PHx,'String',['Отклонение ПН: ' num2str(delta_phx,4) char(176) ';']);
+
+Res.Lit.FiN_PH=FiN;
+Res.Lit.PHx=phx;
+Res.Lit.KrutPHx=krutx0;
+Res.Lit.Delta_PHx=delta_phx;
+
+%% Вертикальная ПХ %%
+for t=1:N0      %меньший индекс
+    if cuty(t)==1
+        i1=t; break
+    end
+end
+for t=N0:-1:1   %больший индекс
+    if cuty(t)==1
+        i2=t; break
+    end
+end
+
+ph=sin(angle(Ry)-angle(Sy)) .* abs(Ry./Sy); %
+phy=ph(i1:i2);
+[nn,in]=min(Sy_dB(i1:i2));
+ic=in+i1;
+xc=sind(FiN0); %координаты центра ПХ
+yc=0.5*(Yy(ic-1)+Yy(ic));
+FiV=asind(Yy(i1:i2))-FiV0;
+
+d_phy_ind=find(round(phy,2)==0)
+delta_phy=FiV(1,d_phy_ind)
+
+iout=round((i2-i1)/4); %крутизна по двум точкам+-чертверть ширины луча
+i3=i1+iout; i4=i2-iout;
+kruty0=(ph(i4)-ph(i3))/(asind(Yy(i4))-asind(Yy(i3)));
+
+axes(hAxes.PelChV); hold on; 
+plot(FiV,phy,'r'); set(gca,'XAxisLocation','origin','YAxisLocation','origin');
+grid minor; xlabel('Град.'); ylabel ('Относ. ед.');
+title({['Вертикальная ПХ, \phi_н_0=', num2str(FiN0,5) char(176),...
+      ', \phi_в_0=', num2str(FiV0,5) char(176)];});  hold off;
+set(Txt.PH.Krut_PHy,'String',['Крутизна ПХ: ' num2str(kruty0,4) ' ед/град;']);
+set(Txt.PH.Delta_PHy,'String',['Отклонение ПН: ' num2str(delta_phy,4) char(176) ';'])
+
+Res.Lit.FiV_PH=FiV;
+Res.Lit.PHy=phy;
+Res.Lit.KrutPHy=kruty0;
+Res.Lit.Delta_PHy=delta_phy;
+
+
+
+
+ChoseAR.m
+
+function  ChoseAR
+global Window tabgroup tab btngroup btn popup hAxes Txt panel
+global Ed Res phase Am DirectName VarPar
+
+set(Ed.ParAFR.ARdop,'Visible','off');
+set(Txt.ParAFR.ARdop,'Visible','off');
+set(Txt.ParAFR.FRdop1,'Visible','off');
+set(Txt.ParAFR.FRdop2,'Visible','off');
+set(Ed.ParAFR.FRdop1,'Visible','off');
+set(Ed.ParAFR.FRdop2,'Visible','off');
+
+switch get(popup.ChsAR,'Value')
+ case 1 % Равномерное
+     Ed.ParAFR.ARdop.String=1;
+ case 2 % cos на пьедестале
+     set(Ed.ParAFR.ARdop,'Visible','on','String',0.1);
+     set(Txt.ParAFR.ARdop,'Visible','on','String','Высота подставки (0<a<1):');
+ case 3 % Дольф-Чебушев
+     set(Txt.ParAFR.ARdop,'Visible','on','String','Подавление БЛ (10<a<100):');
+     set(Ed.ParAFR.ARdop,'Visible','on','String',50);
+ case 4 % Окно Ханна
+     set(Ed.ParAFR.ARdop,'Visible','off');
+     set(Txt.ParAFR.ARdop,'Visible','off');
+ case 5 % Окно Хэмминга
+     set(Ed.ParAFR.ARdop,'Visible','off');
+     set(Txt.ParAFR.ARdop,'Visible','off');
+ case 6 % Окно Блэкмана
+     set(Txt.ParAFR.ARdop,'Visible','on','String','Распределение (a):');
+     set(Ed.ParAFR.ARdop,'Visible','on','String',0.16);
+ case 7 % Окно Кайзера
+     set(Txt.ParAFR.ARdop,'Visible','on','String','Подавление БЛ (10<a<100):');
+     set(Ed.ParAFR.ARdop,'Visible','on','String',50);
+ case 8 % Из файла
+     set(Ed.ParAFR.ARdop,'Visible','off');
+     set(Txt.ParAFR.ARdop,'Visible','off');
+     [DirectName.AR.Name,DirectName.AR.Way] = uigetfile({'*.xls*';'*.txt*'},'OpenFile');
+
+end
+
+
+
+
+ChoseFR.m
+
+function  ChoseAR
+global Window tabgroup tab btngroup btn popup hAxes Txt panel
+global Ed Res phase Am DirectName VarPar
+
+set(Ed.ParAFR.ARdop,'Visible','off');
+set(Txt.ParAFR.ARdop,'Visible','off');
+set(Txt.ParAFR.FRdop1,'Visible','off');
+set(Txt.ParAFR.FRdop2,'Visible','off');
+set(Ed.ParAFR.FRdop1,'Visible','off');
+set(Ed.ParAFR.FRdop2,'Visible','off');
+
+switch get(popup.ChsAR,'Value')
+ case 1 % Равномерное
+     Ed.ParAFR.ARdop.String=1;
+ case 2 % cos на пьедестале
+     set(Ed.ParAFR.ARdop,'Visible','on','String',0.1);
+     set(Txt.ParAFR.ARdop,'Visible','on','String','Высота подставки (0<a<1):');
+ case 3 % Дольф-Чебушев
+     set(Txt.ParAFR.ARdop,'Visible','on','String','Подавление БЛ (10<a<100):');
+     set(Ed.ParAFR.ARdop,'Visible','on','String',50);
+ case 4 % Окно Ханна
+     set(Ed.ParAFR.ARdop,'Visible','off');
+     set(Txt.ParAFR.ARdop,'Visible','off');
+ case 5 % Окно Хэмминга
+     set(Ed.ParAFR.ARdop,'Visible','off');
+     set(Txt.ParAFR.ARdop,'Visible','off');
+ case 6 % Окно Блэкмана
+     set(Txt.ParAFR.ARdop,'Visible','on','String','Распределение (a):');
+     set(Ed.ParAFR.ARdop,'Visible','on','String',0.16);
+ case 7 % Окно Кайзера
+     set(Txt.ParAFR.ARdop,'Visible','on','String','Подавление БЛ (10<a<100):');
+     set(Ed.ParAFR.ARdop,'Visible','on','String',50);
+ case 8 % Из файла
+     set(Ed.ParAFR.ARdop,'Visible','off');
+     set(Txt.ParAFR.ARdop,'Visible','off');
+     [DirectName.AR.Name,DirectName.AR.Way] = uigetfile({'*.xls*';'*.txt*'},'OpenFile');
+
+end
+
+
+
+ChoseMask.m
+
+global Window tabgroup tab btngroup btn popup hAxes Txt panel
+global Ed DirectName 
+
+switch get(popup.ChMask,'Value')
+ case 1 % все полотно
+
+ case 2 %файл
+     [DirectName.Mask.Name,DirectName.Mask.Way]=uigetfile('*.xls*','OpenFile');
+ case 3 % ракетный луч
+end
+
+
+
+ChSaveWay.m
+
+global Ed DirectName
+DirectName.SaveWay=uigetdir('C:\');
+Ed.SaveSett.SaveWay.String =DirectName.SaveWay;
+
+
+ClearAll.m
+
+global Window tabgroup tab btngroup btn popup hAxes Txt panel
+global Ed
+clc
+  cla(hAxes.AR,'reset');
+  cla(hAxes.FR,'reset');
+  cla(hAxes.XOZ,'reset'); 
+  cla(hAxes.YOZ,'reset');
+  cla(hAxes.S3D,'reset');
+  cla(hAxes.Ra3D,'reset');
+  cla(hAxes.Re3D,'reset'); 
+  cla(hAxes.Grid,'reset');
+  cla(hAxes.PelChV,'reset');
+  cla(hAxes.PelChN,'reset');
+  set(Txt.XOZ.Width,'String','');
+  set(Txt.XOZ.KND,'String','');
+  set(Txt.XOZ.UBL,'String','');
+  set(Txt.XOZ.FBLL,'String','');
+  set(Txt.XOZ.FBLR,'String','');
+  set(Txt.XOZ.PoBLL,'String','');
+  set(Txt.XOZ.PoBLR,'String','');
+  set(Txt.XOZ.PelTxt,'String','');
+  set(Txt.XOZ.PelS,'String','' );
+  set(Txt.XOZ.PelR,'String','' );
+  set(Txt.YOZ.Width,'String','');
+  set(Txt.YOZ.KND,'String','');
+  set(Txt.YOZ.UBL,'String','');
+  set(Txt.YOZ.FBLL,'String','' );
+  set(Txt.YOZ.FBLR,'String','' );
+  set(Txt.YOZ.PoBLL,'String','' );
+  set(Txt.YOZ.PoBLR,'String','' );
+  set(Txt.YOZ.PelTxt,'String','' );
+  set(Txt.YOZ.PelS,'String','' );
+  set(Txt.YOZ.PelR,'String','' );
+  set(Txt.S3D.WidthX,'String','');
+  set(Txt.S3D.WidthY,'String','');
+  set(Txt.S3D.KND,'String','');
+  set(Txt.S3D.KNDpr,'String','');
+  set(Txt.S3D.UBL,'String','');
+ 
+  set(Txt.PH.Krut_PHx,'String','');
+  set(Txt.PH.Delta_PHx,'String','');
+  set(Txt.PH.Krut_PHy,'String','');
+  set(Txt.PH.Delta_PHy,'String','');
+
+
+ClearAxes.m
+
+global Window tabgroup tab btngroup btn popup hAxes Txt panel
+global Ed 
+%----------
+h=get(tabgroup.panel,'SelectedTab');
+if strcmp(tab.Result,'АР')==1 cla(hAxes.AR,'reset');
+elseif strcmp(tab.Result,'ФР')==1 cla(hAxes.FR,'reset');
+elseif strcmp(tab.Result,'Сечение XOZ')==1 
+  cla(hAxes.XOZ,'reset'); 
+  set(Txt.XOZ.Width,'String','');
+  set(Txt.XOZ.KND,'String','');
+  set(Txt.XOZ.UBL,'String','');
+  set(Txt.XOZ.FBLL,'String','');
+  set(Txt.XOZ.FBLR,'String','');
+  set(Txt.XOZ.PoBLL,'String','');
+  set(Txt.XOZ.PoBLR,'String','');
+  set(Txt.XOZ.PelTxt,'String','');
+  set(Txt.XOZ.PelS,'String','' );
+  set(Txt.XOZ.PelR,'String','' );
+elseif strcmp(tab.Result,'Сечение YOZ')==1 
+  set(Txt.YOZ.Width,'String','');
+  set(Txt.YOZ.KND,'String','');
+  set(Txt.YOZ.UBL,'String','');
+  set(Txt.YOZ.FBLL,'String','' );
+  set(Txt.YOZ.FBLR,'String','' );
+  set(Txt.YOZ.PoBLL,'String','' );
+  set(Txt.YOZ.PoBLR,'String','' );
+  set(Txt.YOZ.PelTxt,'String','' );
+  set(Txt.YOZ.PelS,'String','' );
+  set(Txt.YOZ.PelR,'String','' );
+elseif strcmp(tab.Result,'Суммарная 3D')==1 
+    cla(hAxes.S3D,'reset');  
+  set(Txt.S3D.WidthX,'String','');
+  set(Txt.S3D.WidthY,'String','');
+  set(Txt.S3D.KND,'String','');
+  set(Txt.S3D.KNDpr,'String','');
+  set(Txt.S3D.UBL,'String','');
+elseif strcmp(tab.Result,'Азимутальная 3D')==1 
+    cla(hAxes.Ra3D,'reset'); 
+elseif strcmp(tab.Result,'Угломестная 3D')==1 
+    cla(hAxes.Re3D,'reset'); 
+elseif strcmp(tab.Result,'Сетка излуч-й')==1 
+    cla(hAxes.Grid,'reset'); 
+% elseif strcmp(tab.Result,'ПХ')==1
+%   cla(hAxes.PelChV,'reset');
+%   cla(hAxes.PelChN,'reset');
+end;
+
+
+
+CW_new.m
+
+clear all
+clc
+% запуск parfor
+% parpool('threads')
+parfor i=1:2
+    par(i)=2+i
+end
+clear par
+%% Глобальные переменные
+global Window tabgroup tab btngroup btn popup hAxes Txt panel
+global Ed DirectName
+
+%% Окна 
+Window.glav = figure('Name','CalcDN_new','Position',[50 50 1200 800],'Resize','Off');
+tabgroup.panel = uitabgroup('Parent',Window.glav,'Position',...
+    [0 0 1 1],'Visible','on');
+tabgroup.Res.SelectionChangedFcn = @tabChangedCB;
+tab.param = uitab('Parent',tabgroup.panel,'Title','Параметры');
+tab.Result.AR = uitab('Parent',tabgroup.panel,'Title','АР');
+tab.Result.FR = uitab('Parent',tabgroup.panel,'Title','ФР');
+tab.Result.XOZ = uitab('Parent',tabgroup.panel,'Title','Сечение XOZ');
+tab.Result.YOZ = uitab('Parent',tabgroup.panel,'Title','Сечение YOZ');
+tab.Result.SechA = uitab('Parent',tabgroup.panel,'Title','Сечение Альфа');
+tab.Result.PelCh = uitab('Parent',tabgroup.panel,'Title','ПХ');
+tab.Result.S3D = uitab('Parent',tabgroup.panel,'Title','Суммарная 3D');
+tab.Result.Ra3D = uitab('Parent',tabgroup.panel,'Title','Азимутальная 3D');
+tab.Result.Re3D = uitab('Parent',tabgroup.panel,'Title','Угломестная 3D');
+tab.Result.Grid = uitab('Parent',tabgroup.panel,'Title','Сетка излуч-й');
+
+% tabgroup.pan = uitabgroup('Parent',Window.glav,'Position',...
+%     [0 0.2 0.3 0.8],'Visible','on');
+% tabgroup.pan.SelectionChangedFcn = @tabChangedCB;
+% tab.pan.param = uitab('Parent',tabgroup.pan,'Title','Параметры расчета');
+% tab.pan.sett = uitab('Parent',tabgroup.pan,'Title','Настройки');
+
+%% Кнопки управления 
+btn.Start = uimenu(Window.glav,"Text",'Старт','Callback','CalcDN');
+btn.SaveResults = uimenu(Window.glav,"Text",'Сохранить','Callback','SaveResults');
+btn.Clear = uimenu(Window.glav,"Text",'Очистить','Callback','ClearAxes');
+btn.ClearAll = uimenu(Window.glav,"Text",'Очистить все','Callback','ClearAll');
+
+%% Панель "Параметры решетки"
+panel.Resh = uipanel('Parent',tab.param,'Title','Параметры решетки',...
+    'Position',[0.01 0.75 0.3 0.25]);
+
+Txt.Resh.Type=uicontrol('Parent',panel.Resh,'Style','text','Units','Normalized',...
+    'Position',[0.02 0.85 0.35 0.1],'String','Сетка излучателей:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+Txt.Resh.Nx=uicontrol('Parent',panel.Resh,'Style','text','Units','Normalized',...
+    'Position',[0.02 0.68 0.36 0.1],'String','К-во излучателей по X:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+Txt.Resh.Ny=uicontrol('Parent',panel.Resh,'Style','text','Units','Normalized',...
+    'Position',[0.02 0.53 0.36 0.1],'String','К-во излучателей по Y:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+Txt.Resh.BalkaX=uicontrol('Parent',panel.Resh,'Style','text','Units','Normalized',...
+    'Position',[0.02 0.36 0.35 0.1],'String','К-во балок по X:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+Txt.Resh.BalkaY=uicontrol('Parent',panel.Resh,'Style','text','Units','Normalized',...
+    'Position',[0.02 0.21 0.35 0.1],'String','К-во балок по Y:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+Txt.Resh.dx=uicontrol('Parent',panel.Resh,'Style','text','Units','Normalized',...
+    'Position',[0.52 0.68 0.35 0.1],'String','Шаг решетки по X, мм:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+Txt.Resh.dy=uicontrol('Parent',panel.Resh,'Style','text','Units','Normalized',...
+    'Position',[0.52 0.53 0.35 0.1],'String','Шаг решетки по Y, мм:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+Txt.Resh.BalkaDx=uicontrol('Parent',panel.Resh,'Style','text','Units','Normalized',...
+    'Position',[0.52 0.36 0.35 0.1],'String','Ширина балки, мм:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+Txt.Resh.BalkaDy=uicontrol('Parent',panel.Resh,'Style','text','Units','Normalized',...
+    'Position',[0.52 0.21 0.35 0.1],'String','Ширина балки, мм:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+Txt.Resh.Litera=uicontrol('Parent',panel.Resh,'Style','text','Units','Normalized',...
+    'Position',[0.02 0.04 0.35 0.1],'String','Литера:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+
+Ed.Resh.Nx = uicontrol('Parent',panel.Resh,'Style','edit','Units','Normalized',...
+    'BackgroundColor',[1 1 1],'Position',[0.39 0.68 0.105 0.1],'String',256);
+Ed.Resh.Ny = uicontrol('Parent',panel.Resh,'Style','edit','Units','Normalized',...
+    'BackgroundColor',[1 1 1],'Position',[0.39 0.53 0.105 0.1],'String',128);
+Ed.Resh.BalkaX = uicontrol('Parent',panel.Resh,'Style','edit','Units','Normalized',...
+    'BackgroundColor',[1 1 1],'Position',[0.39 0.36 0.105 0.1],'String',3);
+Ed.Resh.BalkaY = uicontrol('Parent',panel.Resh,'Style','edit','Units','Normalized',...
+    'BackgroundColor',[1 1 1],'Position',[0.39 0.21 0.105 0.1],'String',0);
+Ed.Resh.dx = uicontrol('Parent',panel.Resh,'Style','edit','Units','Normalized',...
+    'BackgroundColor',[1 1 1],'Position',[0.89 0.68 0.105 0.1],'String',17.7);
+Ed.Resh.dy = uicontrol('Parent',panel.Resh,'Style','edit','Units','Normalized',...
+    'BackgroundColor',[1 1 1],'Position',[0.89 0.53 0.105 0.1],'String',20.4);
+Ed.Resh.BalkaDx = uicontrol('Parent',panel.Resh,'Style','edit','Units','Normalized',...
+    'BackgroundColor',[1 1 1],'Position',[0.89 0.35 0.105 0.1],'String',37);
+Ed.Resh.BalkaDy = uicontrol('Parent',panel.Resh,'Style','edit','Units','Normalized',...
+    'BackgroundColor',[1 1 1],'Position',[0.89 0.21 0.105 0.1],'String',37);
+Ed.Resh.Lit = uicontrol('Parent',panel.Resh,'Style','edit','Units','Normalized',...
+    'BackgroundColor',[1 1 1],'Position',[0.39 0.04 0.105 0.1],'String',41);
+
+btngroup.ReshType = uibuttongroup('Parent',panel.Resh, 'Position', [0.39 0.80 0.61 0.2]);
+btn.ReshType.Rect = uicontrol('Parent',btngroup.ReshType,'Style','radiobutton','Units','Normalized',...
+    'String','прямоугольная','Position',[0.01 0.25 0.5 0.5]);
+btn.ReshType.Geks = uicontrol('Parent',btngroup.ReshType,'Style','radiobutton','Units','Normalized',...
+    'String','гексогональная','Position',[0.52 0.25 0.5 0.5],'Value',1);
+
+%% Панель "Параметры ДН"
+panel.ParDN = uipanel('Parent',tab.param,'Title','Параметры ДН',...
+    'Position',[0.01 0.6 0.3 0.15]);
+Txt.ParDN.Napr = uicontrol('Parent', panel.ParDN, 'Style','text','Units','Normalized',...
+    'Position',[0.02 0.80 0.4 0.15],'String','Направление излучения:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+Txt.ParDN.Th0 = uicontrol('Parent', panel.ParDN, 'Style','text','Units','Normalized',...
+    'Position',[0.44 0.80 0.15 0.15],'String','FiN0, гр:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+Txt.ParDN.Ph0 = uicontrol('Parent', panel.ParDN, 'Style','text','Units','Normalized',...
+    'Position',[0.72 0.80 0.15 0.15],'String','FiV0, гр:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+Txt.ParDN.Diap = uicontrol('Parent', panel.ParDN, 'Style','text','Units','Normalized',...
+    'Position',[0.02 0.55 0.4 0.15],'String','Диапозон, гр:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+Txt.ParDN.ThMin = uicontrol('Parent', panel.ParDN, 'Style','text','Units','Normalized',...
+    'Position',[0.44 0.55 0.15 0.15],'String','Min:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+Txt.ParDN.ThMax = uicontrol('Parent', panel.ParDN, 'Style','text','Units','Normalized',...
+    'Position',[0.72 0.55 0.15 0.15],'String','Max:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+Txt.ParDN.Step2D = uicontrol('Parent', panel.ParDN, 'Style','text','Units','Normalized',...
+    'Position',[0.02 0.3 0.2 0.15],'String','Шаг 2D, гр:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+Txt.ParDN.Sted3D = uicontrol('Parent', panel.ParDN, 'Style','text','Units','Normalized',...
+    'Position',[0.52 0.3 0.2 0.15],'String','Шаг 3D, гр:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+Txt.ParDN.Alpha = uicontrol('Parent', panel.ParDN, 'Style','text','Units','Normalized',...
+    'Position',[0.02 0.05 0.3 0.15],'String','Сечение alpha, гр:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+
+Ed.ParDN.Th0 = uicontrol('Parent',panel.ParDN,'Style','edit','Units','Normalized',...
+    'BackgroundColor',[1 1 1],'Position',[0.60 0.80 0.1 0.15],'String',0);
+Ed.ParDN.Ph0 = uicontrol('Parent',panel.ParDN,'Style','edit','Units','Normalized',...
+    'BackgroundColor',[1 1 1],'Position',[0.88 0.80 0.1 0.15],'String',0);
+Ed.ParDN.Step2D = uicontrol('Parent',panel.ParDN,'Style','edit','Units','Normalized',...
+    'BackgroundColor',[1 1 1],'Position',[0.24 0.3 0.1 0.15],'String',0.01);
+Ed.ParDN.ThMin = uicontrol('Parent',panel.ParDN,'Style','edit','Units','Normalized',...
+    'BackgroundColor',[1 1 1],'Position',[0.60 0.55 0.1 0.15],'String',-89);
+Ed.ParDN.ThMax = uicontrol('Parent',panel.ParDN,'Style','edit','Units','Normalized',...
+    'BackgroundColor',[1 1 1],'Position',[0.88 0.55 0.1 0.15],'String',89);
+Ed.ParDN.Step3D = uicontrol('Parent',panel.ParDN,'Style','edit','Units','Normalized',...
+    'BackgroundColor',[1 1 1],'Position',[0.74 0.3 0.1 0.15],'String',0.1);
+Ed.ParDN.Alpha = uicontrol('Parent',panel.ParDN,'Style','edit','Units','Normalized',...
+    'BackgroundColor',[1 1 1],'Position',[0.37 0.05 0.1 0.15],'String',0);
+
+%% Панель "Параметры АФР"
+panel.ParAFR = uipanel('Parent',tab.param,'Title','Параметры АФР','Position',[0.01 0.24 0.3 0.36]);
+Txt.ParAFR.TypeAR = uicontrol('Parent', panel.ParAFR, 'Style','text',...
+    'Position',[8 237 120 20],'String','Выбор АР:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+popup.ChsAR = uicontrol('Parent',panel.ParAFR,'Style','popup','Position',[140 218 100 50],...
+    'Units','Normalized','String',{'Равномерное','Косинус','Дольф-Чебушев',...
+    'Окно Ханна','Окно Хэмминга','Окно Блэкмана','Окно Кайзера','Из файла...'},'Value',1,'Callback','ChoseAR');
+Txt.ParAFR.ARdop = uicontrol(panel.ParAFR,'Style','text','String','ARdop','BackgroundColor',[0.7 0.7 0.7],...
+    'Position',[8 207 160 20],'Visible','Off');
+Ed.ParAFR.ARdop = uicontrol(panel.ParAFR,'Style','edit','BackgroundColor',[1 1 1],...
+    'Position',[180 207 35 20],'String',1,'Visible','Off');
+
+Txt.ParAFR.TypeFR = uicontrol('Parent', panel.ParAFR, 'Style','text',...
+    'Position',[8 167 120 20],'String','Выбор ФР:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+popup.ChFR = uicontrol('Parent',panel.ParAFR,'Style','popup','Position',[140 145 100 50],...
+    'Units','Normalized','String',{'Равномерное', 'Круговое', 'Пирамидальное','Cферическое',...
+    'Квизифибоначчи', 'Квадратическое','Простые числа','Из файла...'},'Value',1,'Callback','ChoseFR');
+Txt.ParAFR.FRdop1 = uicontrol(panel.ParAFR,'Style','text','String','FR1','BackgroundColor',[0.7 0.7 0.7],...
+    'Position',[8 137 50 20],'Visible','Off');
+Txt.ParAFR.FRdop2 = uicontrol(panel.ParAFR,'Style','text','String','FR2','BackgroundColor',[0.7 0.7 0.7],...
+    'Position',[140 137 50 20],'Visible','Off');
+Ed.ParAFR.FRdop1 = uicontrol(panel.ParAFR,'Style','edit','BackgroundColor',[1 1 1],...
+    'Position',[70 137 35 20],'String',1,'Visible','Off');
+Ed.ParAFR.FRdop2 = uicontrol(panel.ParAFR,'Style','edit','BackgroundColor',[1 1 1],...
+    'Position',[200 137 35 20],'String',1,'Visible','Off');
+
+Txt.ParAFR.Mask = uicontrol('Parent', panel.ParAFR, 'Style','text',...
+    'Position',[10 97 120 20],'String','Маска включений:',...
+    'BackgroundColor',[0.7 0.7 0.7]);
+popup.ChMask = uicontrol('Parent',panel.ParAFR,'Style','popup','Position',[140 73 100 50],...
+    'Units','Normalized','String',{'Полное', 'Другое...','Ракетный луч'},'Value',1,'Callback','ChoseMask');
+
+
+% Txt.ParAFR.TypeAR = uicontrol('Parent', panel.ParAFR, 'Style','text','Units','Normalized',...
+%     'Position',[0.02 0.8 0.35 0.15],'String','Вид АР:',...
+%     'BackgroundColor',[0.7 0.7 0.7]);
+% Txt.ParAFR.TypeAFR = uicontrol('Parent', panel.ParAFR, 'Style','text','Units','Normalized',...
+%     'Position',[0.02 0.52 0.35 0.15],'String','Выбор АФР:',...
+%     'BackgroundColor',[0.7 0.7 0.7]);
+% btngroup.ParAFR = uibuttongroup('Parent', panel.ParAFR, 'Position', [0.39 0.75 0.6 0.25]);
+% btn.ParAFR.ArDB = uicontrol('Parent',btngroup.ParAFR,'Style','radiobutton','Units','Normalized',...
+%     'String','дБ','Position',[0.01 0.25 0.5 0.6]);
+% btn.ParAFR.Ar10 = uicontrol('Parent',btngroup.ParAFR,'Style','radiobutton','Units','Normalized',...
+%     'String','1 и 0','Position',[0.52 0.25 0.5 0.6]);
+
+%% Панель "Настройки отображения"
+panel.Settings = uipanel('Parent',tab.param,'Title',...
+    'Настройки отображения','Position',[0.315 0.6 0.3 0.403]);
+
+btn.SetSect = uicontrol('Parent',panel.Settings,'Style','radiobutton',...
+    'Units','Normalized','String','ДН в сечениях XOZ/YOZ','Position',...
+    [0.01 0.93 0.5 0.06], 'Value',1,'Callback','settingsDN');
+btngroup.SettSect = uibuttongroup('Parent', panel.Settings,...
+    'Position', [0.01 0.85 0.98 0.08]);
+btn.Sect.Sum = uicontrol('Parent',btngroup.SettSect,'Style','checkbox',...
+    'Units','Normalized', 'String','Суммарная','Position',...
+    [0.01 0.15 0.3 0.8], 'Value',1);
+btn.Sect.Rz = uicontrol('Parent',btngroup.SettSect,'Style','checkbox',...
+    'Units', 'Normalized','String','Разностная','Position',...
+    [0.33 0.15 0.3 0.8],'Value',1);
+btn.Sect.SetPeling = uicontrol('Parent',btngroup.SettSect,'Style','checkbox',...
+    'Units','Normalized','String','Пелинг.напр-е','Position',...
+    [0.7 0.15 0.3 0.8], 'Value',0);
+% Txt.Sect.Mode = uicontrol('Parent',btngroup.SettSect,'Style','text','Units',...
+%     'Normalized', 'Position',[0.01 0.09 0.12 0.28],'String','Режим:');
+% popup.Mode = uicontrol('Parent',btngroup.SettSect,'Style','popup','Position',[45 7 110 20],...
+%     'Units','Normalized','String',{'одноканальный','многоканальный'},...
+%     'Value',1,'Callback','settingsDN');  % [138 32 100 50]
+% Txt.Sect.Channel = uicontrol('Parent',btngroup.SettSect,'Style','text',...
+%     'Units','Normalized','Position',[0.45 0.09 0.3 0.28],'String',...
+%     '-- кол-во каналов:','Visible','off');
+% Ed.Settings.Channels = uicontrol('Parent',btngroup.SettSect,'Style','edit',...
+%     'Units','Normalized','BackgroundColor',[1 1 1],'Position',...
+%     [0.75 0.09 0.1 0.28],'String',1,'Visible','off');
+
+btn.Set3D = uicontrol('Parent',panel.Settings,'Style','radiobutton',...
+    'Units','Normalized','String','ДН 3D','Position',[0.01 0.78 0.5 0.06],...
+    'Value',0,'Callback','settingsDN');
+btngroup.Sett3D = uibuttongroup('Parent', panel.Settings, 'Position', [0.01 0.70 0.98 0.08]);
+btn.D3.Sum = uicontrol('Parent',btngroup.Sett3D,'Style','checkbox',...
+    'Units','Normalized','String','Суммарная','Position',...
+    [0.01 0.15 0.5 0.8], 'Value',0);
+btn.D3.RzAz = uicontrol('Parent',btngroup.Sett3D,'Style','checkbox',...
+    'Units','Normalized','String','Азимутальная','Position',...
+    [0.33 0.15 0.5 0.8], 'Value',0);
+btn.D3.RzEl = uicontrol('Parent',btngroup.Sett3D,'Style','checkbox',...
+    'Units','Normalized','String','Угломестная','Position',...
+    [0.7 0.15 0.5 0.8], 'Value',0);
+
+btn.SetAFR = uicontrol('Parent',panel.Settings,'Style','radiobutton','Units','Normalized',...
+    'String','АФР','Position',[0.01 0.63 0.5 0.06],'Value',1,'Callback','settingsDN');
+btngroup.SettAFR = uibuttongroup('Parent',panel.Settings, 'Position', [0.01 0.55 0.98 0.08]);
+btn.AFR.AR = uicontrol('Parent',btngroup.SettAFR,'Style','checkbox',...
+    'Units','Normalized','String','Амплитудное','Position',[0.01 0.15 0.5 0.8], 'Value',1);
+btn.AFR.FR = uicontrol('Parent',btngroup.SettAFR,'Style','checkbox',...
+    'Units','Normalized','String','Фазовое','Position',[0.33 0.15 0.5 0.8], 'Value',1);
+
+btn.SetAlpha = uicontrol('Parent',panel.Settings,'Style','radiobutton','Units','Normalized',...
+    'String','Сечение Альфа','Position',[0.01 0.48 0.5 0.06],'Value',0);
+btn.SetPelCh = uicontrol('Parent',panel.Settings,'Style','radiobutton','Units','Normalized',...
+    'String','Пеленгационная характеристика','Position',[0.01 0.40 0.6 0.06],'Value',1);
+btn.SetGrid=uicontrol('Parent',panel.Settings,'Style','radiobutton','Units','Normalized',...
+    'String','Координатная сетка','Position',[0.01 0.32 0.5 0.06],'Value',0);
+
+
+%% Настройки сохранения
+panel.SaveSettings = uipanel('Parent',tab.param,'Title',...
+    'Настройки сохранения','Position',[0.62 0.6 0.3 0.403]);
+Txt.SaveSett.Name = uicontrol('Parent',panel.SaveSettings,'Style','text','Units','Normalized',...
+    'Position',[0.01 0.93 0.23 0.06],'String','Наименование:');
+popup.SaveSett.FileType = uicontrol('Parent',panel.SaveSettings,'Style','popup','Position',[222 239 60 50],...
+    'Units','Normalized','String',{'.mat','.xlsx','.txt'},'Value',1);
+Txt.SaveSett.Way = uicontrol('Parent',panel.SaveSettings,'Style','text','Units','Normalized',...
+    'Position',[0.01 0.78 0.27 0.06],'String','Путь сохранения:');
+Ed.SaveSett.Name = uicontrol('Parent',panel.SaveSettings,'Style','edit','Units','Normalized',...
+    'BackgroundColor',[1 1 1],'Position',[0.01 0.86 0.6 0.08],'String','');
+btn.ChSaveWay = uicontrol('Parent',panel.SaveSettings,'Style','pushbutton','Position',[222 208 80 30],...
+    'String','Выбрать...','BackgroundColor','#44A6C1','Callback','ChSaveWay');
+Ed.SaveSett.SaveWay = uicontrol('Parent',panel.SaveSettings,'Style','edit','Units','Normalized',...
+    'BackgroundColor',[1 1 1],'Position',[0.01 0.71 0.6 0.08],'String','');
+Txt.SaveSett.WhatSave = uicontrol('Parent',panel.SaveSettings,'Style','text','Units','Normalized',...
+    'Position',[0.01 0.63 0.17 0.06],'String','Сохранить:');
+
+btngroup.SaveWhat = uibuttongroup('Parent',panel.SaveSettings, 'Position', [0.01 0.55 0.98 0.08]);
+btn.SaveSett.ChMass = uicontrol('Parent',btngroup.SaveWhat,'Style','checkbox',...
+    'Units','Normalized','String','Данные','Position',[0.01 0.15 0.5 0.8], 'Value',1);
+btn.SaveSett.ChGraph = uicontrol('Parent',btngroup.SaveWhat,'Style','checkbox',...
+    'Units','Normalized','String','Графики','Position',[0.33 0.15 0.5 0.8], 'Value',1);
+
+btngroup.SaveWhatCh = uibuttongroup('Parent',panel.SaveSettings, 'Position', [0.01 0.01 0.98 0.55]);
+btn.SaveSett.ChMasXOZ = uicontrol('Parent',btngroup.SaveWhatCh,'Style','checkbox',...
+    'Units','Normalized','String','ДН XOZ','Position',[0.01 0.88 0.5 0.09], 'Value',1);
+btn.SaveSett.ChMasYOZ = uicontrol('Parent',btngroup.SaveWhatCh,'Style','checkbox',...
+    'Units','Normalized','String','ДН YOZ','Position',[0.01 0.76 0.5 0.09], 'Value',1);
+btn.SaveSett.ChMasS3D = uicontrol('Parent',btngroup.SaveWhatCh,'Style','checkbox',...
+    'Units','Normalized','String','Суммарная 3D','Position',[0.01 0.64 0.6 0.09], 'Value',0);
+btn.SaveSett.ChMasRA3D = uicontrol('Parent',btngroup.SaveWhatCh,'Style','checkbox',...
+    'Units','Normalized','String','Азимутальная 3D','Position',[0.01 0.52 0.7 0.09], 'Value',0);
+btn.SaveSett.ChMasRE3D = uicontrol('Parent',btngroup.SaveWhatCh,'Style','checkbox',...
+    'Units','Normalized','String','Угломестная 3D','Position',[0.01 0.40 0.7 0.09], 'Value',0);
+btn.SaveSett.ChMasSechA = uicontrol('Parent',btngroup.SaveWhatCh,'Style','checkbox',...
+    'Units','Normalized','String','Сечение Альфа','Position',[0.01 0.28 0.6 0.09], 'Value',0);
+btn.SaveSett.ChPellChar = uicontrol('Parent',btngroup.SaveWhatCh,'Style','checkbox',...
+    'Units','Normalized','String','ПХ','Position',[0.01 0.16 0.6 0.09], 'Value',0);
+
+btn.SaveSett.ChAR = uicontrol('Parent',btngroup.SaveWhatCh,'Style','checkbox',...
+    'Units','Normalized','String','АР','Position',[0.40 0.88 0.6 0.09], 'Value',1); 
+btn.SaveSett.ChFR = uicontrol('Parent',btngroup.SaveWhatCh,'Style','checkbox',...
+    'Units','Normalized','String','ФР','Position',[0.4 0.76 0.6 0.09], 'Value',1);
+btn.SaveSett.ChKND = uicontrol('Parent',btngroup.SaveWhatCh,'Style','checkbox',...
+    'Units','Normalized','String','КНД','Position',[0.4 0.64 0.6 0.09], 'Value',1);
+btn.SaveSett.ChUBL = uicontrol('Parent',btngroup.SaveWhatCh,'Style','checkbox',...
+    'Units','Normalized','String','УБЛ','Position',[0.4 0.52 0.6 0.09], 'Value',1);
+btn.SaveSett.ChWidth = uicontrol('Parent',btngroup.SaveWhatCh,'Style','checkbox',...
+    'Units','Normalized','String','Ширина луча','Position',[0.4 0.40 0.6 0.09], 'Value',1);
+btn.SaveSett.ChFBL = uicontrol('Parent',btngroup.SaveWhatCh,'Style','checkbox',...
+    'Units','Normalized','String','Первый БЛ','Position',[0.4 0.28 0.6 0.09], 'Value',1);
+btn.SaveSett.ChPoBL = uicontrol('Parent',btngroup.SaveWhatCh,'Style','checkbox',...
+    'Units','Normalized','String','Поб. макс. БЛ','Position',[0.4 0.16 0.6 0.09], 'Value',1);
+btn.SaveSett.ChPell = uicontrol('Parent',btngroup.SaveWhatCh,'Style','checkbox',...
+    'Units','Normalized','String','Пеллинг','Position',[0.4 0.04 0.6 0.09], 'Value',1);
+
+
+
+
+
+
+
+%% Окна АФР
+hAxes.AR = axes('Parent',tab.Result.AR,'Color',[1 1 1],'Units','Normalized',...
+    'Position',[0.065 0.25 0.9 0.7], 'FontSize',10); 
+hAxes.FR = axes('Parent',tab.Result.FR,'Color',[1 1 1],'Units','Normalized',...
+    'Position',[0.065 0.25 0.9 0.7], 'FontSize',10);
+
+%% Окно XOZ
+hAxes.XOZ = axes('Parent',tab.Result.XOZ,'Color',[1 1 1],'Units','Normalized',...
+    'Position',[0.065 0.25 0.9 0.7], 'FontSize',10);
+Txt.XOZ.Width = uicontrol(tab.Result.XOZ,'Style','text','Units','Normalized',...
+    'Position',[0.065 0.18 0.15 0.02],'FontSize', 10);
+Txt.XOZ.KND = uicontrol(tab.Result.XOZ,'Style','text','Units','Normalized',...
+    'Position',[0.065 0.16 0.15 0.02],'FontSize', 10);
+Txt.XOZ.UBL = uicontrol(tab.Result.XOZ,'Style','text','Units','Normalized',...
+    'Position',[0.065 0.14 0.15 0.02],'FontSize', 10);
+Txt.XOZ.FBLL = uicontrol(tab.Result.XOZ,'Style','text','Units','Normalized',...
+    'Position',[0.225 0.18 0.22 0.02],'FontSize', 10);
+Txt.XOZ.FBLR = uicontrol(tab.Result.XOZ,'Style','text','Units','Normalized',...
+    'Position',[0.225 0.16 0.22 0.02],'FontSize', 10);
+Txt.XOZ.PoBLL = uicontrol(tab.Result.XOZ,'Style','text','Units','Normalized',...
+    'Position',[0.065 0.03 0.15 0.085],'FontSize', 10);
+Txt.XOZ.PoBLR = uicontrol(tab.Result.XOZ,'Style','text','Units','Normalized',...
+    'Position',[0.225 0.03 0.15 0.085],'FontSize', 10);
+Txt.XOZ.PelTxt = uicontrol(tab.Result.XOZ,'Style','text','Units','Normalized',...
+    'Position',[0.685 0.18 0.22 0.02],'FontSize', 10);
+Txt.XOZ.PelS = uicontrol(tab.Result.XOZ,'Style','text','Units','Normalized',...
+    'Position',[0.625 0.095 0.16 0.085],'FontSize', 10);
+Txt.XOZ.PelR = uicontrol(tab.Result.XOZ,'Style','text','Units','Normalized',...
+    'Position',[0.785 0.095 0.16 0.085],'FontSize', 10);
+
+%% Окно YOZ
+hAxes.YOZ=axes('Parent',tab.Result.YOZ,'Color',[1 1 1],'Units','Normalized',...
+    'Position',[0.065 0.25 0.9 0.7], 'FontSize',10);
+Txt.YOZ.Width = uicontrol(tab.Result.YOZ,'Style','text','Units','Normalized',...
+    'Position',[0.065 0.18 0.15 0.02],'FontSize', 10);
+Txt.YOZ.KND = uicontrol(tab.Result.YOZ,'Style','text','Units','Normalized',...
+    'Position',[0.065 0.16 0.15 0.02],'FontSize', 10);
+Txt.YOZ.UBL = uicontrol(tab.Result.YOZ,'Style','text','Units','Normalized',...
+    'Position',[0.065 0.14 0.15 0.02],'FontSize', 10);
+Txt.YOZ.FBLL = uicontrol(tab.Result.YOZ,'Style','text','Units','Normalized',...
+    'Position',[0.225 0.18 0.22 0.02],'FontSize', 10);
+Txt.YOZ.FBLR = uicontrol(tab.Result.YOZ,'Style','text','Units','Normalized',...
+    'Position',[0.225 0.16 0.22 0.02],'FontSize', 10);
+Txt.YOZ.PoBLL = uicontrol(tab.Result.YOZ,'Style','text','Units','Normalized',...
+    'Position',[0.065 0.03 0.15 0.085],'FontSize', 10);
+Txt.YOZ.PoBLR = uicontrol(tab.Result.YOZ,'Style','text','Units','Normalized',...
+    'Position',[0.225 0.03 0.15 0.085],'FontSize', 10);
+Txt.YOZ.PelTxt = uicontrol(tab.Result.YOZ,'Style','text','Units','Normalized',...
+    'Position',[0.685 0.18 0.22 0.02],'FontSize', 10);
+Txt.YOZ.PelS = uicontrol(tab.Result.YOZ,'Style','text','Units','Normalized',...
+    'Position',[0.625 0.095 0.16 0.085],'FontSize', 10);
+Txt.YOZ.PelR = uicontrol(tab.Result.YOZ,'Style','text','Units','Normalized',...
+    'Position',[0.785 0.095 0.16 0.085],'FontSize', 10);
+
+%% Окно Сечение Альфа
+hAxes.SechA = axes('Parent',tab.Result.SechA,'Color',[1 1 1],'Units','Normalized',...
+    'Position',[0.065 0.25 0.9 0.7], 'FontSize',10);
+
+%% Окно "Суммарная 3D" 
+hAxes.S3D=axes('Parent',tab.Result.S3D,'Color',[1 1 1],'Units','Normalized',...
+    'Position',[0.065 0.25 0.9 0.7], 'FontSize',10);
+Txt.S3D.WidthX=uicontrol(tab.Result.S3D,'Style','text','Units','Normalized',...
+    'Position',[0.065 0.18 0.15 0.02],'FontSize', 10);
+Txt.S3D.WidthY=uicontrol(tab.Result.S3D,'Style','text','Units','Normalized',...
+    'Position',[0.065 0.16 0.15 0.02],'FontSize', 10);
+Txt.S3D.KND=uicontrol(tab.Result.S3D,'Style','text','Units','Normalized',...
+    'Position',[0.065 0.14 0.15 0.02],'FontSize', 10);
+Txt.S3D.KNDpr=uicontrol(tab.Result.S3D,'Style','text','Units','Normalized',...
+    'Position',[0.065 0.12 0.15 0.02],'FontSize', 10);
+Txt.S3D.UBL=uicontrol(tab.Result.S3D,'Style','text','Units','Normalized',...
+    'Position',[0.065 0.10 0.15 0.02],'FontSize', 10);
+
+hAxes.Ra3D=axes('Parent',tab.Result.Ra3D,'Color',[1 1 1],'Units','Normalized',...
+    'Position',[0.065 0.25 0.9 0.7], 'FontSize',10);
+
+hAxes.Re3D=axes('Parent',tab.Result.Re3D,'Color',[1 1 1],'Units','Normalized',...
+    'Position',[0.065 0.25 0.9 0.7], 'FontSize',10);
+
+%% Окно "ПХ"
+hAxes.PelChN = axes('Parent',tab.Result.PelCh,'Color',[1 1 1],'Units','Normalized',...
+    'Position',[0.04 0.25 0.45 0.7], 'FontSize',10);
+Txt.PH.Krut_PHx = uicontrol(tab.Result.PelCh,'Style','text','Units','Normalized',...
+    'Position',[0.065 0.20 0.15 0.02],'FontSize', 10); 
+Txt.PH.Delta_PHx = uicontrol(tab.Result.PelCh,'Style','text','Units','Normalized',...
+    'Position',[0.065 0.18 0.15 0.02],'FontSize', 10); 
+
+hAxes.PelChV = axes('Parent',tab.Result.PelCh,'Color',[1 1 1],'Units','Normalized',...
+    'Position',[0.540 0.25 0.45 0.7], 'FontSize',10);
+Txt.PH.Krut_PHy = uicontrol(tab.Result.PelCh,'Style','text','Units','Normalized',...
+    'Position',[0.565 0.20 0.15 0.02],'FontSize', 10);
+Txt.PH.Delta_PHy = uicontrol(tab.Result.PelCh,'Style','text','Units','Normalized',...
+    'Position',[0.565 0.18 0.15 0.02],'FontSize', 10);
+
+%% Окно "Кординатная сетка" 
+hAxes.Grid = axes('Parent',tab.Result.Grid,'Color',[1 1 1],'Units','Normalized',...
+    'Position',[0.065 0.25 0.9 0.7], 'FontSize',10);
+
+
+DNscan.m
+
+function [ DS_dB  ] = DNscan( xx,yy, whichDS )
+%UNTITLED Загрузка Диаграммы Сканирования элемента
+%   Входные параметры:
+%   whichDS - выбор ДН элемента (DSxoz - плоскость XOZ; 
+%             DSyoz - плоскость YOZ; DS3d - 3D ДН; DSalpha - сечение
+%             плоскостью альфа).
+%   ThMin - минимальное значение Th в диапозоне сканирования ДН.
+%   ThMax - максимальное значение Th в диапозоне сканирования ДН.
+%   stepTh - шаг диапозона сканирования ДН.
+%   file - подгрузка файла ДН (Пример: 'G:\папка\DS.txt').
+% 
+%   Выходные параметры:
+%   DS_dB - ДН в дБ.
+
+global lit
+
+%% Средняя лит
+if lit == 39 || lit == 41 || lit == 53 || lit == 63 || lit == 51
+    importDS = importdata('F:\ДН_моделинг\v.2.1-27.08.2024\DS_s.txt');
+   
+    % whichDS='DS3d';    %DSxoz DSyoz DS3d DSalpha
+
+    m=size(xx); m=m(2);
+    if strcmp(whichDS, 'DSxoz') == 1
+        xx=round(xx,2);
+        stepTh=abs(xx(1)-xx(2));
+        [row, col]=find(importDS(:,1)==0); 
+%     DsR_gr=importDS(row,2); [m,p]=size(DsR_gr); DsL_gr=-DsR_gr(flip(2:m));
+%     Ds_gr=cat(1,DsL_gr,DsR_gr);
+        DsR_dB=importDS(row,3); [u]=size(DsR_dB); DsL_dB=DsR_dB(flip(2:u(1)));
+        DSs_dB=cat(1,DsL_dB,DsR_dB); 
+        DSs_dB=transpose(DSs_dB); rtw=size(DSs_dB); rtw=rtw(2);
+        DS_int=interp1(DSs_dB,(1:0.1:rtw), 'spline');
+        Gr=-89:0.01:89; [n]=size(DS_int); n=n(2);
+        DS_dB=ones(1,m);
+        for j=1:m
+         if xx(j)<Gr(1) DS_dB(j)=DS_int(1); end;
+         if xx(j)>Gr(n) DS_dB(j)=DS_int(n); end;
+         for i=1:n
+         if (xx(j)>=(Gr(i)-stepTh/10)) && (xx(j)<=(Gr(i)+stepTh/10)) 
+           DS_dB(j)=DS_int(i); end;
+         end;
+        end;
+%     figure
+%     plot(Ds_gr, Ds_dB);   
+   
+    elseif strcmp(whichDS, 'DSyoz') == 1
+        xx=round(xx,2);
+        stepTh=abs(xx(1)-xx(2));
+        [row, col]=find(importDS(:,1)==90); 
+%     DsR_gr=importDS(row,2); [m,p]=size(DsR_gr); DsL_gr=-DsR_gr(flip(2:m));
+%     Ds_gr=cat(1,DsL_gr,DsR_gr);
+        DsR_dB=importDS(row,3); [u]=size(DsR_dB); DsL_dB=DsR_dB(flip(2:u(1)));
+        DSs_dB=cat(1,DsL_dB,DsR_dB);
+        DSs_dB=transpose(DSs_dB); rtw=size(DSs_dB); rtw=rtw(2);
+        DS_int=interp1(DSs_dB,(1:0.1:rtw), 'spline');
+        Gr=-89:0.01:89; [n]=size(Gr); n=n(2);
+        DS_dB=ones(1,m);
+        for j=1:m
+           if xx(j)<Gr(1) DS_dB(j)=DS_int(1); end;
+           if xx(j)>Gr(n) DS_dB(j)=DS_int(n); end;
+           for i=1:n
+            if (xx(j)>=(Gr(i)-stepTh/10)) && (xx(j)<=(Gr(i)+stepTh/10)) 
+             DS_dB(j)=DS_int(i); end;
+           end;
+        end;
+%     figure
+%     plot(Ds_gr, Ds_dB);
+    
+    elseif strcmp(whichDS, 'DSalpha') == 1
+       [row, col]=find(importDS(:,1)==alpha); 
+%     DsR_gr=importDS(row,2); [m,p]=size(DsR_gr); DsL_gr=-DsR_gr(flip(2:m));
+%     Ds_gr=cat(1,DsL_gr,DsR_gr);
+       DsR_dB=importDS(row,3); [u]=size(DsR_dB); DsL_gr=DsR_dB(flip(2:u(1)));
+       DSs_dB=cat(1,DsL_gr,DsR_dB);
+       DSs_dB=transpose(DSs_dB);
+       DS_int=interp1(DSs_dB,(1:0.1:rtw), 'spline');
+       Gr=-89:0.01:89; [n]=size(Gr); n=n(2)
+       DS_dB=ones(1,m);
+       for j=1:m
+         if xx(j)<Gr(1) DS_dB(j)=DS_int(1); end;
+         if xx(j)>Gr(n) DS_dB(j)=DS_int(n); end;
+         for i=1:n
+           if (xx(j)>=(Gr(i)-stepTh/10)) && (xx(j)<=(Gr(i)+stepTh/10)) 
+            DS_dB(j)=DS_int(i); end;
+         end;
+       end;
+
+    elseif strcmp(whichDS, 'DS3d') == 1
+      f = repmat(0:90,891,1);
+      t = repmat((0:0.1:89)',1,91);
+      x = asind(sind(t).*sind(f));
+      y = asind(sind(t).*cosd(f));
+      k=1;
+      for i=flip(1:91);
+        s=0;
+        for j=k:(k+890)
+            s=s+1;
+            ds(s,i)=importDS(j,3);
+            if mod(j,891)==0 
+                k=k+891;
+                s=0;
+            end
+        end
+      end
+      Bds=[flip(ds); ds]; % 1 и 4 дб
+      Cds=[flip(Bds,2) Bds]; % все кв дб
+      BXds=[flip(x); x];  % 1 и 4 по х
+      CXds=[-flip(BXds,2) BXds]; %все кв по х
+      BYds=[-flip(y); y];  % 1 и 4 по у
+      CYds=[-flip(BYds,2),BYds]; % все по у
+      DS_dB = griddata(CXds,CYds,Cds,yy,xx);    
+    % оси уу и хх поменяты местами в связи с тем что ДС почему-то
+    % поворачивается на 90 градусов, такой порядок (уу, хх) все чинит
+    end;
+
+%% Нижняя лит
+elseif lit == 27 || lit == 29 || lit == 1
+%     importDS=flip(importdata('G:\ДН_моделинг\v.2.1-27.08.2024\DS_s.txt'),1);
+    importDS=importdata('F:\ДН_моделинг\v.2.1-27.08.2024\DS_n.txt');
+    % whichDS='DS3d';    %DSxoz DSyoz DS3d DSalpha
+
+    m=size(xx); m=m(2);
+    if strcmp(whichDS, 'DSxoz') == 1
+        xx=round(xx,2);
+        stepTh=abs(xx(1)-xx(2));
+        [row, col]=find(importDS(:,1)==0); 
+%     DsR_gr=importDS(row,2); [m,p]=size(DsR_gr); DsL_gr=-DsR_gr(flip(2:m));
+%     Ds_gr=cat(1,DsL_gr,DsR_gr);
+        DsR_dB=importDS(row,3); [u]=size(DsR_dB); DsL_dB=DsR_dB(flip(2:u(1)));
+        DSs_dB=cat(1,DsL_dB,DsR_dB); 
+        DSs_dB=transpose(DSs_dB); rtw=size(DSs_dB); rtw=rtw(2);
+        DS_int=interp1(DSs_dB,(1:0.1:rtw), 'spline');
+        Gr=-89:0.01:89; [n]=size(DS_int); n=n(2);
+        DS_dB=ones(1,m);
+        for j=1:m
+         if xx(j)<Gr(1) DS_dB(j)=DS_int(1); end;
+         if xx(j)>Gr(n) DS_dB(j)=DS_int(n); end;
+         for i=1:n
+         if (xx(j)>=(Gr(i)-stepTh/10)) && (xx(j)<=(Gr(i)+stepTh/10)) 
+           DS_dB(j)=DS_int(i); end;
+         end;
+        end;
+%     figure
+%     plot(Ds_gr, Ds_dB);   
+  
+    elseif strcmp(whichDS, 'DSyoz') == 1
+        xx=round(xx,2);
+        stepTh=abs(xx(1)-xx(2));
+        [row, col]=find(importDS(:,1)==90); 
+%     DsR_gr=importDS(row,2); [m,p]=size(DsR_gr); DsL_gr=-DsR_gr(flip(2:m));
+%     Ds_gr=cat(1,DsL_gr,DsR_gr);
+        DsR_dB=importDS(row,3); [u]=size(DsR_dB); DsL_dB=DsR_dB(flip(2:u(1)));
+        DSs_dB=cat(1,DsL_dB,DsR_dB);
+        DSs_dB=transpose(DSs_dB); rtw=size(DSs_dB); rtw=rtw(2);
+        DS_int=interp1(DSs_dB,(1:0.1:rtw), 'spline');
+        Gr=-89:0.01:89; [n]=size(Gr); n=n(2);
+        DS_dB=ones(1,m);
+        for j=1:m
+           if xx(j)<Gr(1) DS_dB(j)=DS_int(1); end;
+           if xx(j)>Gr(n) DS_dB(j)=DS_int(n); end;
+           for i=1:n
+            if (xx(j)>=(Gr(i)-stepTh/10)) && (xx(j)<=(Gr(i)+stepTh/10)) 
+             DS_dB(j)=DS_int(i); end;
+           end;
+        end;
+%     figure
+%     plot(Ds_gr, Ds_dB);
+
+    elseif strcmp(whichDS, 'DSalpha') == 1
+       [row, col]=find(importDS(:,1)==alpha); 
+%     DsR_gr=importDS(row,2); [m,p]=size(DsR_gr); DsL_gr=-DsR_gr(flip(2:m));
+%     Ds_gr=cat(1,DsL_gr,DsR_gr);
+       DsR_dB=importDS(row,3); [u]=size(DsR_dB); DsL_gr=DsR_dB(flip(2:u(1)));
+       DSs_dB=cat(1,DsL_gr,DsR_dB);
+       DSs_dB=transpose(DSs_dB);
+       DS_int=interp1(DSs_dB,(1:0.1:rtw), 'spline');
+       Gr=-89:0.01:89; [n]=size(Gr); n=n(2)
+       DS_dB=ones(1,m);
+       for j=1:m
+         if xx(j)<Gr(1) DS_dB(j)=DS_int(1); end;
+         if xx(j)>Gr(n) DS_dB(j)=DS_int(n); end;
+         for i=1:n
+           if (xx(j)>=(Gr(i)-stepTh/10)) && (xx(j)<=(Gr(i)+stepTh/10)) 
+            DS_dB(j)=DS_int(i); end;
+         end;
+       end;
+
+    elseif strcmp(whichDS, 'DS3d') == 1
+      f = repmat(0:90,891,1);
+      t = repmat((0:0.1:89)',1,91);
+      x = asind(sind(t).*sind(f));
+      y = asind(sind(t).*cosd(f));
+      k=1;
+      for i=flip(1:91);
+        s=0;
+        for j=k:(k+890)
+            s=s+1;
+            ds(s,i)=importDS(j,3);
+            if mod(j,891)==0 
+                k=k+891;
+                s=0;
+            end
+        end
+      end
+      Bds=[flip(ds); ds]; % 1 и 4 дб
+      Cds=[flip(Bds,2) Bds]; % все кв дб
+      BXds=[flip(x); x];  % 1 и 4 по х
+      CXds=[-flip(BXds,2) BXds]; %все кв по х
+      BYds=[-flip(y); y];  % 1 и 4 по у
+      CYds=[-flip(BYds,2),BYds]; % все по у
+      DS_dB = griddata(CXds,CYds,Cds,yy,xx);    
+    % оси уу и хх поменяты местами в связи с тем что ДС почему-то
+    % поворачивается на 90 градусов, такой порядок (уу, хх) все чинит
+    end;
+
+%% Верхняя лит
+elseif lit == 65 || lit == 75 ||lit == 77 || lit == 101
+    importDS=importdata('F:\ДН_моделинг\v.2.1-27.08.2024\DS_v.txt');
+    % whichDS='DS3d';    %DSxoz DSyoz DS3d DSalpha
+
+    m=size(xx); m=m(2);
+    if strcmp(whichDS, 'DSxoz') == 1
+        xx=round(xx,2);
+        stepTh=abs(xx(1)-xx(2));
+        [row, col]=find(importDS(:,1)==0); 
+%     DsR_gr=importDS(row,2); [m,p]=size(DsR_gr); DsL_gr=-DsR_gr(flip(2:m));
+%     Ds_gr=cat(1,DsL_gr,DsR_gr);
+        DsR_dB=importDS(row,3); [u]=size(DsR_dB); DsL_dB=DsR_dB(flip(2:u(1)));
+        DSs_dB=cat(1,DsL_dB,DsR_dB); 
+        DSs_dB=transpose(DSs_dB); rtw=size(DSs_dB); rtw=rtw(2);
+        DS_int=interp1(DSs_dB,(1:0.1:rtw), 'spline');
+        Gr=-89:0.01:89; [n]=size(DS_int); n=n(2);
+        DS_dB=ones(1,m);
+        for j=1:m
+         if xx(j)<Gr(1) DS_dB(j)=DS_int(1); end;
+         if xx(j)>Gr(n) DS_dB(j)=DS_int(n); end;
+         for i=1:n
+         if (xx(j)>=(Gr(i)-stepTh/10)) && (xx(j)<=(Gr(i)+stepTh/10)) 
+           DS_dB(j)=DS_int(i); end;
+         end;
+        end;
+%     figure
+%     plot(Ds_gr, Ds_dB);   
+   
+    elseif strcmp(whichDS, 'DSyoz') == 1
+        xx=round(xx,2);
+        stepTh=abs(xx(1)-xx(2));
+        [row, col]=find(importDS(:,1)==90); 
+%     DsR_gr=importDS(row,2); [m,p]=size(DsR_gr); DsL_gr=-DsR_gr(flip(2:m));
+%     Ds_gr=cat(1,DsL_gr,DsR_gr);
+        DsR_dB=importDS(row,3); [u]=size(DsR_dB); DsL_dB=DsR_dB(flip(2:u(1)));
+        DSs_dB=cat(1,DsL_dB,DsR_dB);
+        DSs_dB=transpose(DSs_dB); rtw=size(DSs_dB); rtw=rtw(2);
+        DS_int=interp1(DSs_dB,(1:0.1:rtw), 'spline');
+        Gr=-89:0.01:89; [n]=size(Gr); n=n(2);
+        DS_dB=ones(1,m);
+        for j=1:m
+           if xx(j)<Gr(1) DS_dB(j)=DS_int(1); end;
+           if xx(j)>Gr(n) DS_dB(j)=DS_int(n); end;
+           for i=1:n
+            if (xx(j)>=(Gr(i)-stepTh/10)) && (xx(j)<=(Gr(i)+stepTh/10)) 
+             DS_dB(j)=DS_int(i); end;
+           end;
+        end;
+%     figure
+%     plot(Ds_gr, Ds_dB);
+
+    elseif strcmp(whichDS, 'DSalpha') == 1
+       [row, col]=find(importDS(:,1)==alpha); 
+%     DsR_gr=importDS(row,2); [m,p]=size(DsR_gr); DsL_gr=-DsR_gr(flip(2:m));
+%     Ds_gr=cat(1,DsL_gr,DsR_gr);
+       DsR_dB=importDS(row,3); [u]=size(DsR_dB); DsL_gr=DsR_dB(flip(2:u(1)));
+       DSs_dB=cat(1,DsL_gr,DsR_dB);
+       DSs_dB=transpose(DSs_dB);
+       DS_int=interp1(DSs_dB,(1:0.1:rtw), 'spline');
+       Gr=-89:0.01:89; [n]=size(Gr); n=n(2)
+       DS_dB=ones(1,m);
+       for j=1:m
+         if xx(j)<Gr(1) DS_dB(j)=DS_int(1); end;
+         if xx(j)>Gr(n) DS_dB(j)=DS_int(n); end;
+         for i=1:n
+           if (xx(j)>=(Gr(i)-stepTh/10)) && (xx(j)<=(Gr(i)+stepTh/10)) 
+            DS_dB(j)=DS_int(i); end;
+         end;
+       end;
+
+    elseif strcmp(whichDS, 'DS3d') == 1
+      f = repmat(0:90,891,1);
+      t = repmat((0:0.1:89)',1,91);
+      x = asind(sind(t).*sind(f));
+      y = asind(sind(t).*cosd(f));
+      k=1;
+      for i=flip(1:91);
+        s=0;
+        for j=k:(k+890)
+            s=s+1;
+            ds(s,i)=importDS(j,3);
+            if mod(j,891)==0 
+                k=k+891;
+                s=0;
+            end
+        end
+      end
+      Bds=[flip(ds); ds]; % 1 и 4 дб
+      Cds=[flip(Bds,2) Bds]; % все кв дб
+      BXds=[flip(x); x];  % 1 и 4 по х
+      CXds=[-flip(BXds,2) BXds]; %все кв по х
+      BYds=[-flip(y); y];  % 1 и 4 по у
+      CYds=[-flip(BYds,2),BYds]; % все по у
+      DS_dB = griddata(CXds,CYds,Cds,yy,xx);    
+    % оси уу и хх поменяты местами в связи с тем что ДС почему-то
+    % поворачивается на 90 градусов, такой порядок (уу, хх) все чинит
+    end;
+end;
+
+
+end
+
+
+
+KordSetkaOX.m
+
+function [ Xkord ] = KordSetkaOX( Nx, Ny, dx, Nxbalk, xb )
+%KordSetkaOX - Построение координатной сетки (массив Xkord) по оси OX
+%   Nx - Кол-во элементов по оси ОХ
+%   Ny - Кол-во элементов по оси ОУ
+%   dx - шаг по оси ОХ
+%   Nxbalk - Кол-во вертикальных балок
+%   xb - Ширина вертикальной балки
+
+
+if mod(Nx,2)==0
+%     Нет балок
+    if (Nxbalk==0) || (xb==0) 
+        x1=1:Nx/2;
+        x2=(Nx/2+1):Nx;
+        k=0;
+        for i=1:Ny
+            for n=flip(1:Nx/2)
+                Xkord(i, n)=(-k*dx)-(dx/2);
+                k=k+1;
+            end;
+            k=0;
+            for n=(Nx/2+1):Nx
+                Xkord(i,n)=k*dx+dx/2;
+                k=k+1;
+            end;
+            k=0;
+        end;
+    end;
+    
+%     Нечетное кол-во балок
+    if ((xb~=0)||(Nxbalk~=0))&&(mod(Nxbalk,2)==1)
+        Nsec=Nxbalk+1;
+        Nxsec=Nx/Nsec;
+        if mod(Nxsec,1)==0
+            for i=1:Ny
+                k=-1;
+                kb=-1;
+                for n=flip(1:Nx/2)
+                    if mod(n,Nxsec)==0
+                        kb=kb+1;
+                    end;
+                    k=k+1;
+                    Xkord(i,n)=-xb/2-dx/2-k*dx-kb*xb;
+                end;
+                k=-1;
+                kb=-1;
+                for n=(Nx/2+1):Nx
+                    if mod(n,Nxsec)==1
+                        kb=kb+1;
+                    end;
+                    k=k+1;
+                    Xkord(i,n)=xb/2+dx/2+k*dx+kb*xb;
+                end;
+            end;
+        else Xkord='Ошибка 1. Некорректное соотношение балок и элементов по оси ОХ.'
+        end;
+    end;
+    
+%     Четное кол-во балок
+    if ((xb~=0) || (Nxbalk~=0)) && (mod(Nxbalk,2)==0)
+        Nsec=Nxbalk+1;
+        Nxsec=Nx/Nsec;
+        if mod(Nxsec,1)==0
+            for i=1:Ny
+                k=0;
+                kb=0;
+                for n=flip(1:Nx/2)
+                    if mod(n,Nxsec)==0
+                        kb=kb+1;
+                    end;
+                    Xkord(i,n)=-dx/2-k*dx-kb*xb;
+                    k=k+1;
+                end;
+                k=0;
+                kb=0;
+                for n=(Nx/2+1):Nx
+                    if mod(n,Nxsec)==1
+                        kb=kb+1;
+                    end;
+                    Xkord(i,n)=dx/2+k*dx+kb*xb;
+                    k=k+1;
+                end;
+            end;
+        else Xkord='Ошибка 2. Некорректное соотношение балок и элементов по оси ОХ.';
+        end;
+        Nsex=0;
+    end;
+    if Xkord==0
+        Xkord='Ошибка 3.';
+    end;
+end;
+clear k kb Nsec Nxsec x1 x2 
+
+end
+
+
+
+
+function [ Xkord ] = KordSetkaOX( Nx, Ny, dx, Nxbalk, xb )
+%KordSetkaOX - Построение координатной сетки (массив Xkord) по оси OX
+%   Nx - Кол-во элементов по оси ОХ
+%   Ny - Кол-во элементов по оси ОУ
+%   dx - шаг по оси ОХ
+%   Nxbalk - Кол-во вертикальных балок
+%   xb - Ширина вертикальной балки
+
+
+if mod(Nx,2)==0
+%     Нет балок
+    if (Nxbalk==0) || (xb==0) 
+        x1=1:Nx/2;
+        x2=(Nx/2+1):Nx;
+        k=0;
+        for i=1:Ny
+            for n=flip(1:Nx/2)
+                Xkord(i, n)=(-k*dx)-(dx/2);
+                k=k+1;
+            end;
+            k=0;
+            for n=(Nx/2+1):Nx
+                Xkord(i,n)=k*dx+dx/2;
+                k=k+1;
+            end;
+            k=0;
+        end;
+    end;
+    
+%     Нечетное кол-во балок
+    if ((xb~=0)||(Nxbalk~=0))&&(mod(Nxbalk,2)==1)
+        Nsec=Nxbalk+1;
+        Nxsec=Nx/Nsec;
+        if mod(Nxsec,1)==0
+            for i=1:Ny
+                k=-1;
+                kb=-1;
+                for n=flip(1:Nx/2)
+                    if mod(n,Nxsec)==0
+                        kb=kb+1;
+                    end;
+                    k=k+1;
+                    Xkord(i,n)=-xb/2-dx/2-k*dx-kb*xb;
+                end;
+                k=-1;
+                kb=-1;
+                for n=(Nx/2+1):Nx
+                    if mod(n,Nxsec)==1
+                        kb=kb+1;
+                    end;
+                    k=k+1;
+                    Xkord(i,n)=xb/2+dx/2+k*dx+kb*xb;
+                end;
+            end;
+        else Xkord='Ошибка 1. Некорректное соотношение балок и элементов по оси ОХ.'
+        end;
+    end;
+    
+%     Четное кол-во балок
+    if ((xb~=0) || (Nxbalk~=0)) && (mod(Nxbalk,2)==0)
+        Nsec=Nxbalk+1;
+        Nxsec=Nx/Nsec;
+        if mod(Nxsec,1)==0
+            for i=1:Ny
+                k=0;
+                kb=0;
+                for n=flip(1:Nx/2)
+                    if mod(n,Nxsec)==0
+                        kb=kb+1;
+                    end;
+                    Xkord(i,n)=-dx/2-k*dx-kb*xb;
+                    k=k+1;
+                end;
+                k=0;
+                kb=0;
+                for n=(Nx/2+1):Nx
+                    if mod(n,Nxsec)==1
+                        kb=kb+1;
+                    end;
+                    Xkord(i,n)=dx/2+k*dx+kb*xb;
+                    k=k+1;
+                end;
+            end;
+        else Xkord='Ошибка 2. Некорректное соотношение балок и элементов по оси ОХ.';
+        end;
+        Nsex=0;
+    end;
+    if Xkord==0
+        Xkord='Ошибка 3.';
+    end;
+end;
+clear k kb Nsec Nxsec x1 x2 
+
+end
+
+
+
+
+KordSetkaOY.m
+
+function [ Ykord ] = KordSetkaOY( gekso, Nx, Ny, dy, Nybalk, yb  )
+%KordSetkaOY - Построение координатной сетки (массив Ykord) по оси OY
+%   gekso - Определение гексогональности сетки
+%   Nx - Кол-во элементов по оси ОХ
+%   Ny - Кол-во элементов по оси ОУ
+%   dy - шаг по оси ОХ
+%   Nybalk - Кол-во вертикальных балок
+%   yb - Ширина вертикальной балки
+if mod(Ny,2)==0
+    k=0;
+%     Нет балок
+    if (Nybalk==0)||(yb==0)
+        for n=1:Nx
+            for i=flip(1:Ny/2)
+                if gekso==0 c=1; else c=0; end;
+                if gekso==1 g=1; else g=0; end;
+                if (gekso==1)&&(mod(n,2)==1) a=1; else a=0; end;
+                Ykord(i,n)=-a*dy/2-k*dy-g*dy/4-c*dy/2;
+                k=k+1;
+            end;
+            k=0; a=0;
+            for i=(Ny/2+1):Ny
+                if gekso==0 c=1; else c=0; end;
+                if gekso==1 g=1; else g=0; end;
+                if (gekso==1)&&(mod(n,2)==0) a=1; else a=0; end;
+                Ykord(i,n)=a*dy/2+k*dy+g*dy/4+c*dy/2;
+                k=k+1;
+            end;
+            k=0;
+        end;
+    end;
+    
+%     Нечетное кол-во балок
+    if ((yb~=0)||(Nybalk~=0))&(mod(Nybalk,2)==1)
+        Nsec=Nybalk+1;
+        Nysec=Ny/Nsec;
+        if mod(Nysec,1)==0
+            for n=1:Nx
+                k=0; kb=-1;
+                for i=flip(1:Ny/2)
+                    if gekso==0 c=1; else c=0; end;
+                    if gekso==1 g=1; else g=0; end;
+                    if (gekso==1)&&(mod(n,2)==1) a=1; else a=0; end; 
+                    if mod(i,Nysec)==0 kb=kb+1; end; 
+                    Ykord(i,n)=-yb/2-kb*yb-a*dy/2-k*dy-g*dy/4-c*dy/2;
+                    k=k+1;
+                end;
+                kb=-1; k=0;
+                for i=(Ny/2+1):Ny
+                    if gekso==0 c=1; else c=0; end;
+                    if gekso==1 g=1; else g=0; end;
+                    if (gekso==1)&&(mod(n,2)==0) a=1; else a=0; end; 
+                    if mod(i,Nysec)==1 kb=kb+1; end; 
+                    Ykord(i,n)=yb/2+kb*yb+a*dy/2+k*dy+g*dy/4+c*dy/2;
+                    k=k+1;
+                end;
+            end;
+        else Ykord='Ошибка 4. Некорректное соотношение балок и элементов по оси ОУ.'
+        end;
+    end;
+    
+%     Четное кол-во балок
+    if ((yb~=0)||(Nybalk~=0))&(mod(Nybalk,2)==0)
+        Nsec=Nybalk+1;
+        Nysec=Ny/Nsec;
+        if mod(Nysec,1)==0
+            for n=1:Nx
+                k=0; kb=0;
+                for i=flip(1:Ny/2)
+                    if gekso==0 c=1; else c=0; end;
+                    if gekso==1 g=1; else g=0; end;
+                    if (mod(n,2)==1) && (gekso==1) a=1; else a=0; end;
+                    if mod(i,Nysec)==0 kb=kb+1; end;
+                    Ykord(i,n)=-kb*yb-a*dy/2-k*dy-g*dy/4-c*dy/2;  
+                    k=k+1;
+                end;
+                k=0; kb=0;
+                for i=(Ny/2+1):Ny
+                    if gekso==0 c=1; else c=0; end;
+                    if gekso==1 g=1; else g=0; end;
+                    if (mod(n,2)==0) && (gekso==1) a=1; else a=0; end;
+                    if mod(i,Nysec)==1 kb=kb+1; end;
+                    Ykord(i,n)=kb*yb+a*dy/2+k*dy+g*dy/4+c*dy/2;
+                    k=k+1;
+                end;
+            end;
+        else Ykord='Ошибка 4. Некорректное соотношение балок и элементов по оси ОУ.'
+        end;
+    end; end;
+clear k kb Nsec Nxsec x1 x2
+
+end
+
+
+
+
+parametrDN.m
+
+
+function [sh, ubl, PBL , PobMax] = parametrDN(xxx,mas,uroven)
+% Ширина луча в градусах из координаты Х, ДН в дБ, уровень в дБ
+
+
+% если не соразмерны массивы
+if length(xxx) ~= length(mas) 
+    sh = 0; ubl = 0; PBL_Ldb=0; PBL_Rdb;
+    warning('beam_width: Uncorrect data'); return
+end
+
+
+% ШИРИНА ЛУЧА
+maxDN=0;
+[~,max_c]=find(mas==maxDN);
+cut=(sign(mas - uroven)+1)/2;
+non=nonzeros(xxx.*cut); %остались координаты x, где Sdbx>-3
+if (asind(xxx(1,max_c)))>30
+    non(find(non<0))=[];
+elseif (asind(xxx(1,max_c)))<-30
+    non(find(non>0))=[];
+end;
+sh=180/pi*(asin(max(non))-asin(min(non))); %ширина сумм ДН по уровню -3 дБ в сечении плоскостью x0z
+num = length(xxx);
+
+% УБЛ
+try
+    for t=1:num              %меньший индекс - первый максимум
+        if cut(t)==1
+            i1=t; break     
+        end
+    end
+    for t=num:-1:1           %больший индекс - второй максимум
+        if cut(t)==1
+            i2=t; break     
+        end
+    end    
+    for t=i2:num %находим индексы соответствующие ГЛ по смене знака производной - #todo, пока неправда
+        if mas(t+1)-mas(t)>0, t0=t; break
+        end
+    end
+
+    for t=i1:-1:2
+        if mas(t-1)-mas(t)>0, t2=t; break
+        end
+        t2=t;
+    end
+    % ubl= 0; %приходится применять для ШИРа
+
+    ubl = max([max(mas(t0:num)),max(mas(1:t2))]); % максимальное значение ДН в оставшемся диапазоне - УБЛ
+catch    
+    ubl= 0; disp('УБЛ не посчитан');
+end
+
+PobMax=-990; PBL=-999;
+
+% ПБЛ
+ th1=asind(xxx(1,max_c))-sh*10; 
+ th1=round(th1,2);
+ kord1=find(round(asind(xxx),2)==th1);
+ th2=asind(xxx(1,max_c))+sh*10; 
+ th2=round(th2,2);
+ kord2=find(round(asind(xxx),2)==th2);
+ PBL_Ldb=-999; PBL_Rdb=-999; PBL_Lgr=-999; PBL_Rgr=-999;
+ k=0;
+ for i=flip(kord1:max_c)
+   if k==0
+    if mas(i)<maxDN && mas(i)>PBL_Ldb && (mas(i-1)<mas(i) && mas(i)>mas(i+1))
+        PBL_Ldb=mas(i);
+        PBL_Lgr=asind(xxx(i));
+        kord_L=i;
+        k=1;
+    end;
+   end;
+ end;
+ k=0;
+ for i=max_c:kord2
+   if k==0
+    if mas(i)<maxDN && mas(i)>PBL_Rdb && (mas(i-1)<mas(i) && mas(i)>mas(i+1))
+     PBL_Rdb=mas(i);
+     PBL_Rgr=asind(xxx(i));
+     kord_R=i;
+     k=1;
+    end;
+   end;
+ end;
+ PBL_L=[round(PBL_Ldb,2),round(PBL_Lgr,2)];
+ PBL_R=[round(PBL_Rdb,2),round(PBL_Rgr,2)];
+ PBL=[PBL_L;PBL_R];
+ 
+ % побочный максимум
+ m=size(mas); m=m(2);
+ PobMax_Ldb=-999; PobMax_Rdb=-999;
+ PobMax_Lgr=-999; PobMax_Rgr=-999;
+ PobMax_Lind=-999; PobMax_Rind=999;
+ for i=flip(2:kord_L)
+     if  mas(i-1)<mas(i) && mas(i)>mas(i+1) && mas(i)>PobMax_Ldb && i~=kord_L
+         PobMax_Ldb=mas(i);
+         PobMax_Lgr=asind(xxx(i));
+         PobMax_Lind=i;
+     end;
+ end;
+  for i=kord_R:(m-1)
+     if  mas(i-1)<mas(i) && mas(i)>mas(i+1) && mas(i)>PobMax_Rdb && i~=kord_R
+         PobMax_Rdb=mas(i);
+         PobMax_Rgr=asind(xxx(i));
+         PobMax_Rind=i;
+     end;
+ end;
+ PobMax_L=[round(PobMax_Ldb,2),round(PobMax_Lgr,2),PobMax_Lind];
+ PobMax_R=[round(PobMax_Rdb,2),round(PobMax_Rgr,2),PobMax_Rind];
+ PobMax=[PobMax_L; PobMax_R ];
+ clear kord1 kord2 th1 th2
+end
+
+
+SaveResults.m
+
+global Window tabgroup tab btngroup btn popup hAxes Txt panel
+global Res Ed DirectName SaveRes
+
+if get(btn.SaveSett.ChMass,'Value')==1
+    SaveRes=Res;
+    if get(btn.SaveSett.ChAR,'Value')==0
+    SaveRes.Settings.Amplitude=[];
+    end
+    if get(btn.SaveSett.ChFR,'Value')==0
+    SaveRes.Settings.Phase=[];
+    end
+    if get(btn.SaveSett.ChMasXOZ,'Value')==0
+    SaveRes.Lit.XOZ.SUMdb=[]; SaveRes.Lit.XOZ.RZdb=[];
+    end
+    if get(btn.SaveSett.ChMasYOZ,'Value')==0
+    SaveRes.Lit.YOZ.SUMdb=[]; SaveRes.Lit.YOZ.RZdb=[];
+    end
+    if get(btn.SaveSett.ChMasS3D,'Value')==0
+    SaveRes.Lit.D3.SUMdb=[];
+    end
+    if get(btn.SaveSett.ChMasRA3D,'Value')==0
+    SaveRes.Lit.D3.RzAzdb=[];
+    end
+    if get(btn.SaveSett.ChMasRE3D,'Value')==0
+    SaveRes.Lit.D3.RzEldb=[];
+    end
+%     if get(btn.SaveSett.ChMasSechA,'Value')==0
+% 
+%     end
+    if get(btn.SaveSett.ChPellChar,'Value')==0
+    SaveRes.Lit.FiN_PH=[]; SaveRes.Lit.PHy=[];
+    SaveRes.Lit.FiV_PH=[]; SaveRes.Lit.PHx=[];
+    else
+    SaveRes.Lit.PelChar=Res.Lit.PelChar;
+    end
+    if get(btn.SaveSett.ChKND,'Value')==0
+    SaveRes.Lit.KND=[];
+    end 
+    if get(btn.SaveSett.ChUBL,'Value')==0
+    SaveRes.Lit.YOZ.UBL=[]; SaveRes.Lit.YOZ.UBL=[];
+    end
+    if get(btn.SaveSett.ChWidth,'Value')==0
+    SaveRes.Lit.XOZ.Width=[]; SaveRes.Lit.YOZ.Width=[];
+    end
+    if get(btn.SaveSett.ChFBL,'Value')==0
+    SaveRes.Lit.XOZ.FBL_L_db=[]; SaveRes.Lit.YOZ.FBL_L_db=[];
+    SaveRes.Lit.XOZ.FBL_L_deg=[]; SaveRes.Lit.YOZ.FBL_L_deg=[];
+    SaveRes.Lit.XOZ.FBL_R_db=[]; SaveRes.Lit.YOZ.FBL_R_db=[];
+    SaveRes.Lit.XOZ.FBL_R_deg=[]; SaveRes.Lit.YOZ.FBL_R_deg=[];
+    end 
+    if get(btn.SaveSett.ChPoBL,'Value')==0
+    SaveRes.Lit.XOZ.PoBL_L_db=[];  SaveRes.Lit.YOZ.PoBL_L_db=[];
+    SaveRes.Lit.XOZ.PoBL_L_deg=[]; SaveRes.Lit.YOZ.PoBL_L_deg=[];
+    SaveRes.Lit.XOZ.PoBL_R_db=[]; SaveRes.Lit.YOZ.PoBL_R_db=[];
+    SaveRes.Lit.XOZ.PoBL_R_deg=[]; SaveRes.Lit.YOZ.PoBL_R_deg=[];
+    end     
+    if get(btn.SaveSett.ChPell,'Value')==0
+    SaveRes.Lit.XOZ.Pell_SUM_db=[]; SaveRes.Lit.XOZ.Pell_RZ_db=[];
+    SaveRes.Lit.YOZ.Pell_SUM_db=[]; SaveRes.Lit.YOZ.Pell_Ry_db=[];
+    SaveRes.Lit.XOZ.Pell_SUM_deg=[]; SaveRes.Lit.XOZ.Pell_RZ_deg=[];
+    SaveRes.Lit.YOZ.Pell_SUM_deg=[]; SaveRes.Lit.YOZ.Pell_RZ_deg=[];
+    end     
+end
+
+switch get(popup.SaveSett.FileType,'Value')
+  case 1
+   FileName=[get(Ed.SaveSett.Name,'String'),'.mat'];
+   SaveWay=[(DirectName.SaveWay),'\',FileName]
+   save(SaveWay,'SaveRes');
+  case 2
+   FileName=[get(Ed.SaveSett.Name,'String'),'.xlsx'];
+   SaveWay=[(DirectName.SaveWay),'\',FileName];
+   
+%% Параметры
+   % -Углы-
+   writematrix(['Тетта0,град'],SaveWay,'Sheet','Параметры','Range','A1');
+   writematrix(['Фи0,град'],SaveWay,'Sheet','Параметры','Range','A2');
+   writematrix(['Шаг, град'],SaveWay,'Sheet','Параметры','Range','A3');
+   writematrix(['Нижн. диап., град'],SaveWay,'Sheet','Параметры','Range','A4');
+   writematrix(['Верхн. диап., град'],SaveWay,'Sheet','Параметры','Range','A5');
+   writematrix(SaveRes.Settings.Th0,SaveWay,'Sheet','Параметры','Range','B1');
+   writematrix(SaveRes.Settings.Ph0,SaveWay,'Sheet','Параметры','Range','B2'); 
+   writematrix(SaveRes.Settings.Step2D,SaveWay,'Sheet','Параметры','Range','B3');
+   writematrix(SaveRes.Settings.ThMax,SaveWay,'Sheet','Параметры','Range','B4');
+   writematrix(SaveRes.Settings.ThMin,SaveWay,'Sheet','Параметры','Range','B5');
+   
+   % -решетка-
+   writematrix(['Кол-во по X, шт'],SaveWay,'Sheet','Параметры','Range','D1');
+   writematrix(['Кол-во по Y, шт'],SaveWay,'Sheet','Параметры','Range','D2');
+   writematrix(['Шаг по X, мм'],SaveWay,'Sheet','Параметры','Range','D3');
+   writematrix(['Шаг по Y, мм'],SaveWay,'Sheet','Параметры','Range','D4');
+   writematrix(['Балка по X, шт'],SaveWay,'Sheet','Параметры','Range','D5');
+   writematrix(['Балка по Y, шт'],SaveWay,'Sheet','Параметры','Range','D6');
+   writematrix(['Ширина X балки, мм'],SaveWay,'Sheet','Параметры','Range','D7');
+   writematrix(['Ширина Y балки, мм'],SaveWay,'Sheet','Параметры','Range','D8');
+
+   writematrix(SaveRes.Settings.Nx,SaveWay,'Sheet','Параметры','Range','E1');
+   writematrix(SaveRes.Settings.Ny,SaveWay,'Sheet','Параметры','Range','E2');
+   writematrix(SaveRes.Settings.dx,SaveWay,'Sheet','Параметры','Range','E3');
+   writematrix(SaveRes.Settings.dy,SaveWay,'Sheet','Параметры','Range','E4');
+   writematrix(SaveRes.Settings.NxBalka,SaveWay,'Sheet','Параметры','Range','E5');
+   writematrix(SaveRes.Settings.NyBalka,SaveWay,'Sheet','Параметры','Range','E6');
+   writematrix(SaveRes.Settings.xBalka,SaveWay,'Sheet','Параметры','Range','E7');
+   writematrix(SaveRes.Settings.yBalka,SaveWay,'Sheet','Параметры','Range','E8');
+
+ %% АФР
+   writematrix(SaveRes.Settings.Amplitude,SaveWay,'Sheet','АР','Range','A1');
+   writematrix(SaveRes.Settings.Phase,SaveWay,'Sheet','ФР','Range','A1');
+   writematrix(SaveRes.Settings.Mask,SaveWay,'Sheet','Маска','Range','A1');
+
+ %% Параметры ДН
+   % Главное
+   writematrix(['Тетта0,град'],SaveWay,'Sheet','Параметры ДН','Range','A1');
+   writematrix(['Фи0,град'],SaveWay,'Sheet','Параметры ДН','Range','A2');
+   writematrix(['КНД, дБ'],SaveWay,'Sheet','Параметры ДН','Range','A3');
+   writematrix(['Ширина луча X, град'],SaveWay,'Sheet','Параметры ДН','Range','A4');
+   writematrix(['Ширина луча Y, град'],SaveWay,'Sheet','Параметры ДН','Range','A5');
+   writematrix(['УБЛ X, дБ'],SaveWay,'Sheet','Параметры ДН','Range','A6');
+   writematrix(['УБЛ Y, дБ'],SaveWay,'Sheet','Параметры ДН','Range','A7');
+   writematrix(['ПХ накл, ед/град'],SaveWay,'Sheet','Параметры ДН','Range','A8');
+   writematrix(['ПХ верт, ед/град'],SaveWay,'Sheet','Параметры ДН','Range','A9');
+
+   writematrix(SaveRes.Settings.Th0,SaveWay,'Sheet','Параметры ДН','Range','B1');
+   writematrix(SaveRes.Settings.Ph0,SaveWay,'Sheet','Параметры ДН','Range','B2'); 
+   writematrix(SaveRes.Lit.KND,SaveWay,'Sheet','Параметры ДН','Range','B3');
+   writematrix(SaveRes.Lit.XOZ.Width,SaveWay,'Sheet','Параметры ДН','Range','B4');
+   writematrix(SaveRes.Lit.YOZ.Width,SaveWay,'Sheet','Параметры ДН','Range','B5');
+   writematrix(SaveRes.Lit.XOZ.UBL,SaveWay,'Sheet','Параметры ДН','Range','B6');
+   writematrix(SaveRes.Lit.YOZ.UBL,SaveWay,'Sheet','Параметры ДН','Range','B7');
+   writematrix(SaveRes.Lit.KrutPHx,SaveWay,'Sheet','Параметры ДН','Range','B8');
+   writematrix(SaveRes.Lit.KrutPHy,SaveWay,'Sheet','Параметры ДН','Range','B9');
+
+   % XOZ
+   writematrix(['XOZ'],SaveWay,'Sheet','Параметры ДН','Range','D1');
+   writematrix(['Л. первый БЛ , дБ'],SaveWay,'Sheet','Параметры ДН','Range','D2');
+   writematrix(['Л. первый БЛ , град'],SaveWay,'Sheet','Параметры ДН','Range','D3');
+   writematrix(['П. первый БЛ , дБ'],SaveWay,'Sheet','Параметры ДН','Range','D4');
+   writematrix(['П. первый БЛ , град'],SaveWay,'Sheet','Параметры ДН','Range','D5');
+   writematrix(['Поб. Л. БЛ , дБ'],SaveWay,'Sheet','Параметры ДН','Range','D6');
+   writematrix(['Поб. Л. БЛ , град'],SaveWay,'Sheet','Параметры ДН','Range','D7');
+   writematrix(['Поб. П. БЛ , дБ'],SaveWay,'Sheet','Параметры ДН','Range','D8');
+   writematrix(['Поб. П. БЛ , град'],SaveWay,'Sheet','Параметры ДН','Range','D9');
+   writematrix(['П , град'],SaveWay,'Sheet','Параметры ДН','Range','D9');
+   writematrix(['Пеленг Сум , град'],SaveWay,'Sheet','Параметры ДН','Range','D10');
+   writematrix(['Пеленг Раз , град'],SaveWay,'Sheet','Параметры ДН','Range','D11');
+
+   writematrix(SaveRes.Lit.XOZ.FBL_L_db,SaveWay,'Sheet','Параметры ДН','Range','E2');
+   writematrix(SaveRes.Lit.XOZ.FBL_L_deg,SaveWay,'Sheet','Параметры ДН','Range','E3');
+   writematrix(SaveRes.Lit.XOZ.FBL_R_db,SaveWay,'Sheet','Параметры ДН','Range','E4');
+   writematrix(SaveRes.Lit.XOZ.FBL_R_deg,SaveWay,'Sheet','Параметры ДН','Range','E5');
+   writematrix(SaveRes.Lit.XOZ.PoBL_L_db,SaveWay,'Sheet','Параметры ДН','Range','E6');
+   writematrix(SaveRes.Lit.XOZ.PoBL_L_deg,SaveWay,'Sheet','Параметры ДН','Range','E7');
+   writematrix(SaveRes.Lit.XOZ.PoBL_R_db,SaveWay,'Sheet','Параметры ДН','Range','E8');
+   writematrix(SaveRes.Lit.XOZ.PoBL_R_deg,SaveWay,'Sheet','Параметры ДН','Range','E9');
+   writematrix(SaveRes.Lit.XOZ.Pell_SUM_deg,SaveWay,'Sheet','Параметры ДН','Range','E10');
+   writematrix(SaveRes.Lit.XOZ.Pell_RZ_deg,SaveWay,'Sheet','Параметры ДН','Range','E11');
+
+   % YOZ
+   writematrix(['YOZ'],SaveWay,'Sheet','Параметры ДН','Range','G1');
+   writematrix(['Л. первый БЛ , дБ'],SaveWay,'Sheet','Параметры ДН','Range','G2');
+   writematrix(['Л. первый БЛ , град'],SaveWay,'Sheet','Параметры ДН','Range','G3');
+   writematrix(['П. первый БЛ , дБ'],SaveWay,'Sheet','Параметры ДН','Range','G4');
+   writematrix(['П. первый БЛ , град'],SaveWay,'Sheet','Параметры ДН','Range','G5');
+   writematrix(['Поб. Л. БЛ , дБ'],SaveWay,'Sheet','Параметры ДН','Range','G6');
+   writematrix(['Поб. Л. БЛ , град'],SaveWay,'Sheet','Параметры ДН','Range','G7');
+   writematrix(['Поб. П. БЛ , дБ'],SaveWay,'Sheet','Параметры ДН','Range','G8');
+   writematrix(['Поб. П. БЛ , град'],SaveWay,'Sheet','Параметры ДН','Range','G9');
+   writematrix(['П , град'],SaveWay,'Sheet','Параметры ДН','Range','G9');
+   writematrix(['Пеленг Сум , град'],SaveWay,'Sheet','Параметры ДН','Range','G10');
+   writematrix(['Пеленг Раз , град'],SaveWay,'Sheet','Параметры ДН','Range','G11');
+
+   writematrix(SaveRes.Lit.YOZ.FBL_L_db,SaveWay,'Sheet','Параметры ДН','Range','H2');
+   writematrix(SaveRes.Lit.YOZ.FBL_L_deg,SaveWay,'Sheet','Параметры ДН','Range','H3');
+   writematrix(SaveRes.Lit.YOZ.FBL_R_db,SaveWay,'Sheet','Параметры ДН','Range','H4');
+   writematrix(SaveRes.Lit.YOZ.FBL_R_deg,SaveWay,'Sheet','Параметры ДН','Range','H5');
+   writematrix(SaveRes.Lit.YOZ.PoBL_L_db,SaveWay,'Sheet','Параметры ДН','Range','H6');
+   writematrix(SaveRes.Lit.YOZ.PoBL_L_deg,SaveWay,'Sheet','Параметры ДН','Range','H7');
+   writematrix(SaveRes.Lit.YOZ.PoBL_R_db,SaveWay,'Sheet','Параметры ДН','Range','H8');
+   writematrix(SaveRes.Lit.YOZ.PoBL_R_deg,SaveWay,'Sheet','Параметры ДН','Range','H9');
+   writematrix(SaveRes.Lit.YOZ.Pell_SUM_deg,SaveWay,'Sheet','Параметры ДН','Range','H10');
+   writematrix(SaveRes.Lit.YOZ.Pell_RZ_deg,SaveWay,'Sheet','Параметры ДН','Range','H11');
+  
+   
+ %% Сечения ДН    
+   writematrix(['Cум XOZ'],SaveWay,'Sheet','Cечения ДН','Range','A1');
+   writematrix(['Угол, град'],SaveWay,'Sheet','Cечения ДН','Range','A2');
+   writematrix(['Мощность, дБ'],SaveWay,'Sheet','Cечения ДН','Range','B2');
+   writematrix(SaveRes.Lit.FiN,SaveWay,'Sheet','Cечения ДН','Range','A3:A20000');
+   writematrix(Res.Lit.XOZ.SUMdb,SaveWay,'Sheet','Cечения ДН','Range','B3:B20000');
+
+   writematrix(['Раз XOZ'],SaveWay,'Sheet','Cечения ДН','Range','D1');
+   writematrix(['Угол, град'],SaveWay,'Sheet','Cечения ДН','Range','D2');
+   writematrix(['Мощность, дБ'],SaveWay,'Sheet','Cечения ДН','Range','E2');
+   writematrix(SaveRes.Lit.FiN,SaveWay,'Sheet','Cечения ДН','Range','D3:D20000');
+   writematrix(Res.Lit.XOZ.RZdb,SaveWay,'Sheet','Cечения ДН','Range','E3:E20000');
+
+   writematrix(['Cум YOZ'],SaveWay,'Sheet','Cечения ДН','Range','G1');
+   writematrix(['Угол, град'],SaveWay,'Sheet','Cечения ДН','Range','G2');
+   writematrix(['Мощность, дБ'],SaveWay,'Sheet','Cечения ДН','Range','H2');
+   writematrix(SaveRes.Lit.FiV,SaveWay,'Sheet','Cечения ДН','Range','G3:G20000');
+   writematrix(Res.Lit.YOZ.SUMdb,SaveWay,'Sheet','Cечения ДН','Range','H3:H20000');
+
+   writematrix(['Раз YOZ'],SaveWay,'Sheet','Cечения ДН','Range','J1');
+   writematrix(['Угол, град'],SaveWay,'Sheet','Cечения ДН','Range','J2');
+   writematrix(['Мощность, дБ'],SaveWay,'Sheet','Cечения ДН','Range','K2');
+   writematrix(SaveRes.Lit.FiN,SaveWay,'Sheet','Cечения ДН','Range','J3:J20000');
+   writematrix(Res.Lit.YOZ.RZdb,SaveWay,'Sheet','Cечения ДН','Range','K3:K20000');
+
+   writematrix(['ПХ накл'],SaveWay,'Sheet','Cечения ДН','Range','M1');
+   writematrix(['Угол, град'],SaveWay,'Sheet','Cечения ДН','Range','M2');
+   writematrix(['Отн. ед.'],SaveWay,'Sheet','Cечения ДН','Range','N2');
+   writematrix(SaveRes.Lit.FiN_PH,SaveWay,'Sheet','Cечения ДН','Range','M3:M20000');
+   writematrix(SaveRes.Lit.PHx,SaveWay,'Sheet','Cечения ДН','Range','N3:N20000');
+   
+   writematrix(['ПХ накл'],SaveWay,'Sheet','Cечения ДН','Range','P1');
+   writematrix(['Угол, град'],SaveWay,'Sheet','Cечения ДН','Range','P2');
+   writematrix(['Отн. ед.'],SaveWay,'Sheet','Cечения ДН','Range','Q2');
+   writematrix(SaveRes.Lit.FiV_PH,SaveWay,'Sheet','Cечения ДН','Range','P3:P20000');
+   writematrix(SaveRes.Lit.PHy,SaveWay,'Sheet','Cечения ДН','Range','Q3:Q20000');
+   
+   writematrix(['Альфа'],SaveWay,'Sheet','Cечения ДН','Range','S1');
+   writematrix(['Угол, град'],SaveWay,'Sheet','Cечения ДН','Range','S2');
+   writematrix(['Cум мощность, дБ'],SaveWay,'Sheet','Cечения ДН','Range','T2');
+   writematrix(['РАз мощность, дБ'],SaveWay,'Sheet','Cечения ДН','Range','U2');
+
+ %% Cум 3D
+   writematrix(['Cум XOZ'],SaveWay,'Sheet','Cум 3D','Range','A1');
+
+
+
+end
+
+
+
+
+settingsDN.m
+
+if get(btn.SetSect,'Value')==0
+    set(btngroup.SettSect,'Visible','off');
+    set(btn.Sect.Sum,'Value',0);
+    set(btn.Sect.Rz,'Value',0);
+    set(btn.Sect.SetPeling,'Value',0);
+%     set(popup.Mode,'Value',1);
+%     set(Ed.Settings.Channels,'String',1,'Visible','off');
+elseif get(btn.SetSect,'Value')==1
+    set(btngroup.SettSect,'Visible','on');
+    set(btn.Sect.Sum,'Value',1);
+    set(btn.Sect.Rz,'Value',1); 
+%     set(popup.Mode,'Value',1);
+%     set(Ed.Settings.Channels,'String',1,'Visible','off');
+end
+
+% switch get(popup.Mode,'Value')
+%     case 1 % одноканальный
+%         set(Ed.Settings.Channels,'String',1,'Visible','off');
+%         set(Txt.Sect.Channel,'Visible','off');
+%     case 2 % многоканальный
+%         set(Ed.Settings.Channels,'String',2,'Visible','on');
+%         set(Txt.Sect.Channel,'String','-- кол-во каналов:','Visible','on');
+% end
+
+if get(btn.Set3D,'Value')==0
+    set(btngroup.Sett3D,'Visible','off');
+    set(btn.D3.Sum,'Value',0);
+    set(btn.D3.RzAz,'Value',0);
+    set(btn.D3.RzEl,'Value',0);
+elseif get(btn.Set3D,'Value')==1
+    set(btngroup.Sett3D,'Visible','on');
+    set(btn.D3.Sum,'Value',1);
+end
+if get(btn.SetAFR,'Value')==1
+set(btngroup.SettAFR,'Visible','on');
+set(btn.AFR.AR,'Value',1);
+set(btn.AFR.FR,'Value',1);
+elseif get(btn.SetAFR,'Value')==0
+set(btngroup.SettAFR,'Visible','off');
+set(btn.AFR.AR,'Value',0);
+set(btn.AFR.FR,'Value',0);
+end;
+
+
+
