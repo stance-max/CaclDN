@@ -33,6 +33,15 @@ class GridType(str, Enum):
     HEXAGONAL = "hexagonal"      # Гексагональная сетка
 
 
+class ScanPatternType(str, Enum):
+    """Тип импортируемой диаграммы сканирования (DNscan.m)."""
+
+    AUTO = "auto"      # Выбор по литере
+    LOWER = "lower"    # Нижняя лита (DS_n)
+    MIDDLE = "middle"  # Средняя лита (DS_s)
+    UPPER = "upper"    # Верхняя лита (DS_v)
+
+
 @dataclass
 class ArrayParameters:
     "Параметры антенной решетки"
@@ -81,6 +90,11 @@ class PatternParameters:
     step_2d: float = 0.1
     step_3d: float = 0.1
     alpha: float = 0.0 # Сечение, град
+
+    # ---- Импорт диаграммы сканирования (DNscan.m) ----
+    scan_pattern_type: ScanPatternType = ScanPatternType.AUTO
+    scan_pattern_loaded: bool = False
+    scan_pattern_file_path: str = ""
 
 
 class ARType(str, Enum):
@@ -188,6 +202,9 @@ class CalculationArrays:
     phase_deg: Any = None      # phase (deg)
     phase_rx_deg: Any = None   # phaseRx (deg)
     phase_ry_deg: Any = None   # phaseRy (deg)
+
+    # Импортированная диаграмма сканирования (DNscan)
+    scan_pattern_raw: Any = None  # таблица Nx3: [phi(or alpha), theta, dB]
     
 @dataclass(slots=True)
 class PlotFlags:
@@ -385,7 +402,7 @@ class DataManager:
         state_raw = payload.get("state", {})
         restored_state = AppState(
             array=_array_from_dict(state_raw.get("array", {})),
-            pattern=PatternParameters(**state_raw.get("pattern", {})),
+            pattern=_pattern_from_dict(state_raw.get("pattern", {})),
             afr=_afr_from_dict(state_raw.get("afr", {})),
             plots=PlotFlags(**state_raw.get("plots", {})),
             calc_arrays=CalculationArrays(**state_raw.get("calc_arrays", {})),
@@ -435,6 +452,14 @@ def _to_serializable(value: Any) -> Any:
     if isinstance(value, (list, tuple, set)):
         return [_to_serializable(v) for v in value]
     return value
+
+
+def _pattern_from_dict(payload: Dict[str, Any]) -> PatternParameters:
+    """Восстановить PatternParameters с enum-типом ScanPatternType."""
+    normalized = dict(payload)
+    if "scan_pattern_type" in normalized and not isinstance(normalized["scan_pattern_type"], ScanPatternType):
+        normalized["scan_pattern_type"] = ScanPatternType(normalized["scan_pattern_type"])
+    return PatternParameters(**normalized)
 
 
 def _array_from_dict(payload: Dict[str, Any]) -> ArrayParameters:
