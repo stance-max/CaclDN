@@ -5,7 +5,7 @@ from typing import Any, Dict
 
 import numpy as np
 
-from DataManager import ARType, DataManager, PRType
+from DataManager import ARType, DataManager, MaskType, PRType
 
 
 PHASE_QUANT_STEP_DEG = 5.625
@@ -58,7 +58,7 @@ def calculate_afr(data_manager: DataManager, *, random_seed: int | None = None) 
         file_path=afr.amplitude_file_path,
     )
 
-    mask = _resolve_mask(data_manager, nx=nx, ny=ny, fallback=state.calc_arrays.mask)
+    mask = _resolve_mask(data_manager, nx=nx, ny=ny)
     amplitude = mask * amplitude_raw
 
     phase_dist_deg = _build_phase_distribution_deg(
@@ -132,14 +132,23 @@ def calculate_afr(data_manager: DataManager, *, random_seed: int | None = None) 
 
 
 def _resolve_coordinates(data_manager: DataManager, *, nx: int, ny: int, dx: float, dy: float) -> tuple[np.ndarray, np.ndarray]:
+    afr = data_manager.state.afr
     xkord = data_manager.get_calc_array("xkord")
     ykord = data_manager.get_calc_array("ykord")
+
+    if afr.xkord_imported or afr.ykord_imported:
+        if not (afr.xkord_imported and afr.ykord_imported):
+            raise ValueError("Для импортированных координат необходимо загрузить и xkord, и ykord.")
+        if xkord is None or ykord is None:
+            raise ValueError("Флаги импорта xkord/ykord установлены, но массивы отсутствуют в DataManager.calc_arrays.")
 
     if xkord is not None and ykord is not None:
         x_arr = np.asarray(xkord, dtype=float)
         y_arr = np.asarray(ykord, dtype=float)
         if x_arr.shape == (ny, nx) and y_arr.shape == (ny, nx):
             return x_arr, y_arr
+        if afr.xkord_imported or afr.ykord_imported:
+            raise ValueError(f"Неверный размер импортированных координат: x={x_arr.shape}, y={y_arr.shape}, ожидается {(ny, nx)}")
 
     x = (np.arange(nx, dtype=float) - (nx - 1) / 2.0) * dx
     y = (np.arange(ny, dtype=float) - (ny - 1) / 2.0) * dy
@@ -275,17 +284,24 @@ def _build_phase_distribution_deg(
     raise ValueError(f"Неизвестный тип фазового распределения: {phase_type}")
 
 
-def _resolve_mask(data_manager: DataManager, *, nx: int, ny: int, fallback: Any) -> np.ndarray:
-    mask_mode = int(data_manager.get("mask_mode", 1))
+def _resolve_mask(data_manager: DataManager, *, nx: int, ny: int) -> np.ndarray:
+    afr = data_manager.state.afr
 
-    if mask_mode == 1:
+    if afr.mask_type == MaskType.FULL:
         return np.ones((ny, nx), dtype=float)
 
-    if mask_mode == 2:
-        mask_path = str(data_manager.get("mask_file_path", ""))
-        return _load_array_from_file(file_path=mask_path, expected_shape=(ny, nx), name="mask")
+    if afr.mask_type == MaskType.IMPORTED:
+        if not afr.mask_imported:
+            raise ValueError("Выбран тип маски IMPORTED, но флаг mask_imported=False.")
+        mask = data_manager.get_calc_array("mask")
+        if mask is None:
+            raise ValueError("Флаг mask_imported=True, но маска отсутствует в DataManager.calc_arrays.mask.")
+        mask_arr = np.asarray(mask, dtype=float)
+        if mask_arr.shape != (ny, nx):
+            raise ValueError(f"Неверный размер импортированной маски: {mask_arr.shape}, ожидается {(ny, nx)}")
+        return mask_arr
 
-    if mask_mode == 3:
+    if afr.mask_type == MaskType.ROCKET:
         mask = np.zeros((ny, nx), dtype=float)
         # 64 центральных БП (перенос индексации gn(2,64), gn(3,64) из AFR.m).
         if nx >= 192:
@@ -296,12 +312,7 @@ def _resolve_mask(data_manager: DataManager, *, nx: int, ny: int, fallback: Any)
             mask[:, left:right] = 1.0
         return mask
 
-    if fallback is not None:
-        mask = np.asarray(fallback, dtype=float)
-        if mask.shape == (ny, nx):
-            return mask
-
-    raise ValueError(f"Неизвестный mask_mode={mask_mode}")
+    raise ValueError(f"Неизвестный тип mask_type={afr.mask_type}")
 
 
 def _load_array_from_file(*, file_path: str, expected_shape: tuple[int, int], name: str) -> np.ndarray:

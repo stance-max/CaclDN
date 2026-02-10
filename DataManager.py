@@ -109,6 +109,14 @@ class PRType(str, Enum):
     FROM_FILE = "from_file"            # 8) Из файла
 
 
+class MaskType(str, Enum):
+    """Тип маски включения излучателей (AFR.m -> ChMask)."""
+
+    FULL = "full"            # 1) Все полотно
+    IMPORTED = "imported"    # 2) Импортированная маска
+    ROCKET = "rocket"        # 3) 64 центральных БП (ракетный луч)
+
+
 @dataclass
 class AFRParameters:
     "Параметры амлитудно-фазового распределения"
@@ -126,6 +134,15 @@ class AFRParameters:
     # ---- Типы распределений из AFR.m/ChoseAR.m/ChoseFR.m ----
     amplitude_type: ARType = ARType.UNIFORM
     phase_type: PRType = PRType.UNIFORM
+    mask_type: MaskType = MaskType.FULL
+
+    # ---- Флаги и пути импортируемых массивов (обновляются импортёром) ----
+    mask_imported: bool = False
+    xkord_imported: bool = False
+    ykord_imported: bool = False
+    mask_file_path: str = ""
+    xkord_file_path: str = ""
+    ykord_file_path: str = ""
     
         # ---- Универсальные "доп" параметры GUI ----
     # ARdop из ChoseAR.m: один параметр, смысл зависит от amplitude_type:
@@ -435,4 +452,6 @@ def _afr_from_dict(payload: Dict[str, Any]) -> AFRParameters:
         normalized["amplitude_type"] = ARType(normalized["amplitude_type"])
     if "phase_type" in normalized and not isinstance(normalized["phase_type"], PRType):
         normalized["phase_type"] = PRType(normalized["phase_type"])
+    if "mask_type" in normalized and not isinstance(normalized["mask_type"], MaskType):
+        normalized["mask_type"] = MaskType(normalized["mask_type"])
     return AFRParameters(**normalized)
