@@ -6,6 +6,7 @@ from typing import Any, Dict
 import numpy as np
 
 from DataManager import ARType, DataManager, MaskType, PRType
+from CalcCord import calculate_coordinate_grid
 
 
 PHASE_QUANT_STEP_DEG = 5.625
@@ -132,27 +133,12 @@ def calculate_afr(data_manager: DataManager, *, random_seed: int | None = None) 
 
 
 def _resolve_coordinates(data_manager: DataManager, *, nx: int, ny: int, dx: float, dy: float) -> tuple[np.ndarray, np.ndarray]:
-    afr = data_manager.state.afr
-    xkord = data_manager.get_calc_array("xkord")
-    ykord = data_manager.get_calc_array("ykord")
-
-    if afr.xkord_imported or afr.ykord_imported:
-        if not (afr.xkord_imported and afr.ykord_imported):
-            raise ValueError("Для импортированных координат необходимо загрузить и xkord, и ykord.")
-        if xkord is None or ykord is None:
-            raise ValueError("Флаги импорта xkord/ykord установлены, но массивы отсутствуют в DataManager.calc_arrays.")
-
-    if xkord is not None and ykord is not None:
-        x_arr = np.asarray(xkord, dtype=float)
-        y_arr = np.asarray(ykord, dtype=float)
-        if x_arr.shape == (ny, nx) and y_arr.shape == (ny, nx):
-            return x_arr, y_arr
-        if afr.xkord_imported or afr.ykord_imported:
-            raise ValueError(f"Неверный размер импортированных координат: x={x_arr.shape}, y={y_arr.shape}, ожидается {(ny, nx)}")
-
-    x = (np.arange(nx, dtype=float) - (nx - 1) / 2.0) * dx
-    y = (np.arange(ny, dtype=float) - (ny - 1) / 2.0) * dy
-    return np.meshgrid(x, y)
+    xkord, ykord = calculate_coordinate_grid(data_manager)
+    x_arr = np.asarray(xkord, dtype=float)
+    y_arr = np.asarray(ykord, dtype=float)
+    if x_arr.shape != (ny, nx) or y_arr.shape != (ny, nx):
+        raise ValueError(f"Неверный размер координатной сетки: x={x_arr.shape}, y={y_arr.shape}, ожидается {(ny, nx)}")
+    return x_arr, y_arr
 
 
 def _build_amplitude(
