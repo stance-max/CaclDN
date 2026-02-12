@@ -152,6 +152,11 @@ def calculate_dn2_sections(
     # Ключевые массивы сохраняем в CalculationArrays.
     data_manager.set_calc_array("dn2_angles_deg", th)
 
+    data_manager.set_calc_array("dn2_sum_xoz_complex", None if sx is None else sx)
+    data_manager.set_calc_array("dn2_sum_yoz_complex", None if sy is None else sy)
+    data_manager.set_calc_array("dn2_diff_xoz_complex", None if rx is None else rx)
+    data_manager.set_calc_array("dn2_diff_yoz_complex", None if ry is None else ry)
+
     data_manager.set_calc_array("dn2_sum_xoz_linear", None if sum_result is None else sum_result["xoz_linear"])
     data_manager.set_calc_array("dn2_sum_yoz_linear", None if sum_result is None else sum_result["yoz_linear"])
     data_manager.set_calc_array("dn2_sum_xoz_db", None if sum_result is None else sum_result["xoz_db"])

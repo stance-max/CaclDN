@@ -222,6 +222,18 @@ class CalculationArrays:
     dn2_diff_xoz_db: Any = None
     dn2_diff_yoz_db: Any = None
 
+    # Комплексные отклики 2D (для CalcPCH/дальнейших расчётов)
+    dn2_sum_xoz_complex: Any = None
+    dn2_sum_yoz_complex: Any = None
+    dn2_diff_xoz_complex: Any = None
+    dn2_diff_yoz_complex: Any = None
+
+    # Пеленгационная характеристика (CalcPCH)
+    pch_fi_n_deg: Any = None
+    pch_nakl: Any = None
+    pch_fi_v_deg: Any = None
+    pch_vert: Any = None
+
     # 3D ДН (CalcDN3) — ключевые массивы
     dn3_x_deg: Any = None
     dn3_y_deg: Any = None
@@ -233,7 +245,8 @@ class CalculationArrays:
 class PlotFlags:
     "Флаги визуализации и построения графиков"
     open_2d: bool = True      # 2D сечения XOZ/YOZ
-    open_peleng: bool = False # Пеленгационное направление
+    open_peling: bool = False # Пеленгационное направление
+    open_pch: bool = False    # Пеленгационная характеристика (ПХ)
     open_3d: bool = False     # 3D расчёты разрешены
     open_3d_sum: bool = True  # Суммарная 3D
     open_3d_rz_az: bool = False  # Азимутальная 3D
@@ -430,7 +443,7 @@ class DataManager:
             array=_array_from_dict(state_raw.get("array", {})),
             pattern=_pattern_from_dict(state_raw.get("pattern", {})),
             afr=_afr_from_dict(state_raw.get("afr", {})),
-            plots=PlotFlags(**state_raw.get("plots", {})),
+            plots=_plots_from_dict(state_raw.get("plots", {})),
             calc_arrays=CalculationArrays(**state_raw.get("calc_arrays", {})),
             results=state_raw.get("results", {}),
             runtime=state_raw.get("runtime", {}),
@@ -489,6 +502,14 @@ def _pattern_from_dict(payload: Dict[str, Any]) -> PatternParameters:
     if "dn2_use_scan_pattern" in normalized and "use_scanpattern" not in normalized:
         normalized["use_scanpattern"] = normalized.pop("dn2_use_scan_pattern")
     return PatternParameters(**normalized)
+
+
+def _plots_from_dict(payload: Dict[str, Any]) -> PlotFlags:
+    """Восстановить PlotFlags с обратной совместимостью по именам полей."""
+    normalized = dict(payload)
+    if "open_peleng" in normalized and "open_peling" not in normalized:
+        normalized["open_peling"] = normalized.pop("open_peleng")
+    return PlotFlags(**normalized)
 
 
 def _array_from_dict(payload: Dict[str, Any]) -> ArrayParameters:
