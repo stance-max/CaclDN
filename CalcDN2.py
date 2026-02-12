@@ -5,6 +5,7 @@ from typing import Any, Dict
 import numpy as np
 
 from DataManager import DataManager
+from ImportParameters import calculate_scan_pattern_db
 
 
 def calculate_dn2_sections(
@@ -55,6 +56,16 @@ def calculate_dn2_sections(
     xx_const = np.sin(np.deg2rad(float(pat.th0)))
     yy_const = np.sin(np.deg2rad(float(pat.ph0)))
 
+    # Режим расчёта 2D-сечений: множитель решётки / с учётом ДС.
+    use_scan_pattern = bool(pat.dn2_use_scan_pattern)
+    dskx = np.ones_like(th, dtype=float)
+    dsky = np.ones_like(th, dtype=float)
+    if use_scan_pattern:
+        dsx = np.asarray(calculate_scan_pattern_db(data_manager, th, th, "DSxoz"), dtype=float)
+        dsy = np.asarray(calculate_scan_pattern_db(data_manager, th, th, "DSyoz"), dtype=float)
+        dskx = np.power(10.0, dsx / 20.0)
+        dsky = np.power(10.0, dsy / 20.0)
+
     k = float(arr.wave_k)
 
     # Предвычисление комплексных весов (уменьшает вычисления в циклах по углам).
@@ -77,24 +88,55 @@ def calculate_dn2_sections(
     diff_result: Dict[str, Any] | None = None
 
     if calc_sum and sx is not None and sy is not None:
-        sx_db = _to_db_norm(np.abs(sx))
-        sy_db = _to_db_norm(np.abs(sy))
+        sx_abs = np.abs(sx)
+        sy_abs = np.abs(sy)
+
+        i_max_x = int(np.argmax(sx_abs)) if sx_abs.size else 0
+        i_max_y = int(np.argmax(sy_abs)) if sy_abs.size else 0
+
+        if use_scan_pattern:
+            max_x = sx_abs[i_max_x] * dskx[i_max_x] if sx_abs.size else 1.0
+            max_y = sy_abs[i_max_y] * dsky[i_max_y] if sy_abs.size else 1.0
+            sx_norm = (sx_abs * dskx) / max(max_x, 1e-15)
+            sy_norm = (sy_abs * dsky) / max(max_y, 1e-15)
+        else:
+            sx_norm = sx_abs / max(float(np.max(sx_abs)), 1e-15)
+            sy_norm = sy_abs / max(float(np.max(sy_abs)), 1e-15)
+
+        sx_db = _to_db(sx_norm)
+        sy_db = _to_db(sy_norm)
         sum_result = {
-            "xoz_linear": np.abs(sx),
-            "yoz_linear": np.abs(sy),
+            "xoz_linear": sx_abs,
+            "yoz_linear": sy_abs,
             "xoz_db": sx_db,
             "yoz_db": sy_db,
         }
 
     if calc_diff and rx is not None and ry is not None and sx is not None and sy is not None:
-        # Нормируем разностные относительно максимумов суммарных (как в CalcDN.m).
-        sx_max = float(np.max(np.abs(sx))) if np.max(np.abs(sx)) > 0 else 1.0
-        sy_max = float(np.max(np.abs(sy))) if np.max(np.abs(sy)) > 0 else 1.0
-        rx_db = _to_db(np.abs(rx) / sx_max)
-        ry_db = _to_db(np.abs(ry) / sy_max)
+        sx_abs = np.abs(sx)
+        sy_abs = np.abs(sy)
+        rx_abs = np.abs(rx)
+        ry_abs = np.abs(ry)
+
+        i_max_x = int(np.argmax(sx_abs)) if sx_abs.size else 0
+        i_max_y = int(np.argmax(sy_abs)) if sy_abs.size else 0
+
+        if use_scan_pattern:
+            max_x = sx_abs[i_max_x] * dskx[i_max_x] if sx_abs.size else 1.0
+            max_y = sy_abs[i_max_y] * dsky[i_max_y] if sy_abs.size else 1.0
+            rx_norm = (rx_abs * dskx) / max(max_x, 1e-15)
+            ry_norm = (ry_abs * dsky) / max(max_y, 1e-15)
+        else:
+            sx_max = max(float(np.max(sx_abs)), 1e-15)
+            sy_max = max(float(np.max(sy_abs)), 1e-15)
+            rx_norm = rx_abs / sx_max
+            ry_norm = ry_abs / sy_max
+
+        rx_db = _to_db(rx_norm)
+        ry_db = _to_db(ry_norm)
         diff_result = {
-            "xoz_linear": np.abs(rx),
-            "yoz_linear": np.abs(ry),
+            "xoz_linear": rx_abs,
+            "yoz_linear": ry_abs,
             "xoz_db": rx_db,
             "yoz_db": ry_db,
         }
@@ -102,6 +144,7 @@ def calculate_dn2_sections(
     result = {
         "angles_deg": th,
         "angle_range_deg": {"th_min": th_min, "th_max": th_max, "step": step},
+        "use_scan_pattern": use_scan_pattern,
         "sum": sum_result,
         "diff": diff_result,
     }

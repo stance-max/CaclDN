@@ -96,6 +96,11 @@ class PatternParameters:
     scan_pattern_loaded: bool = False
     scan_pattern_file_path: str = ""
 
+    # Флаг режима расчёта 2D-сечений:
+    # False -> только множитель решётки (без ДС),
+    # True  -> расчёт с учётом диаграммы сканирования элемента (ДС).
+    dn2_use_scan_pattern: bool = False
+
 
 class ARType(str, Enum):
     "Тип амплитудного распределения (АР) в соответствии с ChoseAR.m."
