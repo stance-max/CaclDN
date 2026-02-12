@@ -99,7 +99,7 @@ class PatternParameters:
     # Флаг режима расчёта 2D-сечений:
     # False -> только множитель решётки (без ДС),
     # True  -> расчёт с учётом диаграммы сканирования элемента (ДС).
-    dn2_use_scan_pattern: bool = False
+    use_scanpattern: bool = False
 
 
 class ARType(str, Enum):
@@ -464,6 +464,9 @@ def _pattern_from_dict(payload: Dict[str, Any]) -> PatternParameters:
     normalized = dict(payload)
     if "scan_pattern_type" in normalized and not isinstance(normalized["scan_pattern_type"], ScanPatternType):
         normalized["scan_pattern_type"] = ScanPatternType(normalized["scan_pattern_type"])
+    # Backward compatibility: старое имя флага -> новое.
+    if "dn2_use_scan_pattern" in normalized and "use_scanpattern" not in normalized:
+        normalized["use_scanpattern"] = normalized.pop("dn2_use_scan_pattern")
     return PatternParameters(**normalized)
 
 

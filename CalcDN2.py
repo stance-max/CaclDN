@@ -57,7 +57,7 @@ def calculate_dn2_sections(
     yy_const = np.sin(np.deg2rad(float(pat.ph0)))
 
     # Режим расчёта 2D-сечений: множитель решётки / с учётом ДС.
-    use_scan_pattern = bool(pat.dn2_use_scan_pattern)
+    use_scan_pattern = bool(pat.use_scanpattern)
     dskx = np.ones_like(th, dtype=float)
     dsky = np.ones_like(th, dtype=float)
     if use_scan_pattern:
@@ -144,7 +144,7 @@ def calculate_dn2_sections(
     result = {
         "angles_deg": th,
         "angle_range_deg": {"th_min": th_min, "th_max": th_max, "step": step},
-        "use_scan_pattern": use_scan_pattern,
+        "use_scanpattern": use_scan_pattern,
         "sum": sum_result,
         "diff": diff_result,
     }
