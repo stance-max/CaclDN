@@ -221,13 +221,23 @@ class CalculationArrays:
     dn2_diff_yoz_linear: Any = None
     dn2_diff_xoz_db: Any = None
     dn2_diff_yoz_db: Any = None
+
+    # 3D ДН (CalcDN3) — ключевые массивы
+    dn3_x_deg: Any = None
+    dn3_y_deg: Any = None
+    dn3_sum_db: Any = None
+    dn3_rz_az_db: Any = None
+    dn3_rz_el_db: Any = None
     
 @dataclass(slots=True)
 class PlotFlags:
     "Флаги визуализации и построения графиков"
     open_2d: bool = True      # 2D сечения XOZ/YOZ
     open_peleng: bool = False # Пеленгационное направление
-    open_3d: bool = False     # 3D диаграмма
+    open_3d: bool = False     # 3D расчёты разрешены
+    open_3d_sum: bool = True  # Суммарная 3D
+    open_3d_rz_az: bool = False  # Азимутальная 3D
+    open_3d_rz_el: bool = False  # Угломестная 3D
     open_section: bool = False  # Произвольное сечение
     open_grid: bool = False   # Координатная сетка излучателей
     open_ar: bool = False     # График амплитудного распределения
