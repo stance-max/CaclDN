@@ -210,6 +210,17 @@ class CalculationArrays:
 
     # Импортированная диаграмма сканирования (DNscan)
     scan_pattern_raw: Any = None  # таблица Nx3: [phi(or alpha), theta, dB]
+
+    # 2D-сечения ДН (CalcDN2) — ключевые массивы
+    dn2_angles_deg: Any = None
+    dn2_sum_xoz_linear: Any = None
+    dn2_sum_yoz_linear: Any = None
+    dn2_sum_xoz_db: Any = None
+    dn2_sum_yoz_db: Any = None
+    dn2_diff_xoz_linear: Any = None
+    dn2_diff_yoz_linear: Any = None
+    dn2_diff_xoz_db: Any = None
+    dn2_diff_yoz_db: Any = None
     
 @dataclass(slots=True)
 class PlotFlags:

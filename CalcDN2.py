@@ -149,7 +149,30 @@ def calculate_dn2_sections(
         "diff": diff_result,
     }
 
-    data_manager.set_result("dn2_sections", result)
+    # Ключевые массивы сохраняем в CalculationArrays.
+    data_manager.set_calc_array("dn2_angles_deg", th)
+
+    data_manager.set_calc_array("dn2_sum_xoz_linear", None if sum_result is None else sum_result["xoz_linear"])
+    data_manager.set_calc_array("dn2_sum_yoz_linear", None if sum_result is None else sum_result["yoz_linear"])
+    data_manager.set_calc_array("dn2_sum_xoz_db", None if sum_result is None else sum_result["xoz_db"])
+    data_manager.set_calc_array("dn2_sum_yoz_db", None if sum_result is None else sum_result["yoz_db"])
+
+    data_manager.set_calc_array("dn2_diff_xoz_linear", None if diff_result is None else diff_result["xoz_linear"])
+    data_manager.set_calc_array("dn2_diff_yoz_linear", None if diff_result is None else diff_result["yoz_linear"])
+    data_manager.set_calc_array("dn2_diff_xoz_db", None if diff_result is None else diff_result["xoz_db"])
+    data_manager.set_calc_array("dn2_diff_yoz_db", None if diff_result is None else diff_result["yoz_db"])
+
+    # В results храним метаданные диапазона/режима.
+    data_manager.set_result(
+        "dn2_sections",
+        {
+            "angle_range_deg": result["angle_range_deg"],
+            "use_scanpattern": use_scan_pattern,
+            "sum_ready": sum_result is not None,
+            "diff_ready": diff_result is not None,
+            "points": int(th.size),
+        },
+    )
     data_manager.set(
         "dn2_sections",
         {
