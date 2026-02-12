@@ -259,6 +259,48 @@ class PlotFlags:
 
     
 @dataclass(slots=True)
+class ParameterScalars:
+    """Сводные числовые параметры расчётов (float/int) для удобной навигации."""
+
+    # 2D DN XOZ
+    knd_x_db: float = float("nan")
+    width_x_deg: float = float("nan")
+    ubl_x_db: float = float("nan")
+    sidelobe_next_x_db: float = float("nan")
+    sidelobe_rms_x_db: float = float("nan")
+
+    # 2D DN YOZ
+    knd_y_db: float = float("nan")
+    width_y_deg: float = float("nan")
+    ubl_y_db: float = float("nan")
+    sidelobe_next_y_db: float = float("nan")
+    sidelobe_rms_y_db: float = float("nan")
+
+    # Пеленгационные направления (2D)
+    pel_sum_x_idx: int = -1
+    pel_sum_x_deg: float = float("nan")
+    pel_sum_x_db: float = float("nan")
+    pel_diff_x_idx: int = -1
+    pel_diff_x_deg: float = float("nan")
+    pel_diff_x_db: float = float("nan")
+
+    pel_sum_y_idx: int = -1
+    pel_sum_y_deg: float = float("nan")
+    pel_sum_y_db: float = float("nan")
+    pel_diff_y_idx: int = -1
+    pel_diff_y_deg: float = float("nan")
+    pel_diff_y_db: float = float("nan")
+
+    # 3D DN
+    knd_3d_db: float = float("nan")
+    width_3d_x_deg: float = float("nan")
+    width_3d_y_deg: float = float("nan")
+    ubl_3d_db: float = float("nan")
+    sidelobe_rms_3d_db: float = float("nan")
+    sidelobe_next_3d_db: float = float("nan")
+
+
+@dataclass(slots=True)
 class AppState:
     """Полное типизированное состояние приложения.
 
@@ -277,6 +319,7 @@ class AppState:
     afr: AFRParameters = field(default_factory=AFRParameters)
     plots: PlotFlags = field(default_factory=PlotFlags)
     calc_arrays: CalculationArrays = field(default_factory=CalculationArrays)
+    calc_params: ParameterScalars = field(default_factory=ParameterScalars)
     results: Dict[str, Any] = field(default_factory=dict)
     runtime: Dict[str, Any] = field(default_factory=dict)
 
@@ -396,6 +439,23 @@ class DataManager:
             value = getattr(self._state.calc_arrays, name)
             return default if value is None else value
 
+    def set_calc_param(self, name: str, value: Any, *, notify: bool = True) -> None:
+        """Сохранить числовой расчётный параметр по имени поля `calc_params`."""
+        with self._lock:
+            if not hasattr(self._state.calc_params, name):
+                raise AttributeError(f"Unknown calc param field: {name}")
+            setattr(self._state.calc_params, name, value)
+        if notify:
+            self._emit(f"calc_params.{name}", value)
+
+    def get_calc_param(self, name: str, default: Any = None) -> Any:
+        """Получить числовой параметр по имени поля `calc_params`."""
+        with self._lock:
+            if not hasattr(self._state.calc_params, name):
+                return default
+            value = getattr(self._state.calc_params, name)
+            return default if value is None else value
+
     # ----------------------------- Подписки -------------------------------
     def subscribe(self, key: str, callback: Subscriber) -> None:
         """Подписка на обновления.
@@ -445,6 +505,7 @@ class DataManager:
             afr=_afr_from_dict(state_raw.get("afr", {})),
             plots=_plots_from_dict(state_raw.get("plots", {})),
             calc_arrays=CalculationArrays(**state_raw.get("calc_arrays", {})),
+            calc_params=ParameterScalars(**state_raw.get("calc_params", {})),
             results=state_raw.get("results", {}),
             runtime=state_raw.get("runtime", {}),
         )
