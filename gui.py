@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from dataclasses import asdict
 from typing import Dict
 
@@ -12,6 +12,12 @@ from DataManager import (
     PRType,
     ScanPatternType,
 )
+from CalcAFR import calculate_afr
+from CalcDN2 import calculate_dn2_sections
+from CalcDN3 import calculate_dn3
+from CalcPCH import calculate_pch
+from CalcParam import calculate_parameters
+from plot import render_all
 
 
 class CalcDnGUI:
@@ -220,6 +226,23 @@ class CalcDnGUI:
     def _on_start(self) -> None:
         self._apply_state()
         self.dm.set("gui.command", "start")
+
+        try:
+            calculate_afr(self.dm)
+            calculate_dn2_sections(self.dm, calc_sum=True, calc_diff=True)
+
+            if self.dm.state.plots.open_3d:
+                calculate_dn3(self.dm)
+
+            calculate_pch(self.dm)
+            calculate_parameters(self.dm)
+            render_all(self.dm, self.tabs)
+        except Exception as exc:
+            messagebox.showerror("Ошибка расчёта", str(exc), parent=self.root)
+            self.dm.set("gui.last_error", str(exc))
+            return
+
+        messagebox.showinfo("CalcDN", "Расчёт завершён и графики обновлены.", parent=self.root)
 
     def _on_save(self) -> None:
         self.dm.set("gui.command", "save")
