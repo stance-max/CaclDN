@@ -1,17 +1,25 @@
 from __future__ import annotations
 
+import importlib
+import importlib.util
 import tkinter as tk
 from typing import Any, Mapping
 
 import numpy as np
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.figure import Figure
 
 from DataManager import DataManager
+
+FigureCanvasTkAgg = None
+Figure = None
 
 
 def render_all(data_manager: DataManager, tabs: Mapping[str, tk.Widget]) -> None:
     """Построить доступные графики в GUI-вкладках с учетом флагов."""
+    if not _ensure_plot_backend():
+        for tab in tabs.values():
+            _draw_text(tab, "Matplotlib не установлен. Установите: pip install matplotlib")
+        return
+
     st = data_manager.state
     ca = st.calc_arrays
     plots = st.plots
@@ -48,6 +56,22 @@ def render_all(data_manager: DataManager, tabs: Mapping[str, tk.Widget]) -> None
     _plot_grid(tabs.get("grid"), _arr(ca.xkord), _arr(ca.ykord), show=plots.open_grid)
 
 
+
+def _ensure_plot_backend() -> bool:
+    global FigureCanvasTkAgg, Figure
+
+    if FigureCanvasTkAgg is not None and Figure is not None:
+        return True
+
+    if importlib.util.find_spec("matplotlib") is None:
+        return False
+
+    tkagg = importlib.import_module("matplotlib.backends.backend_tkagg")
+    figure_mod = importlib.import_module("matplotlib.figure")
+    FigureCanvasTkAgg = tkagg.FigureCanvasTkAgg
+    Figure = figure_mod.Figure
+    return True
+
 def _arr(v: Any) -> np.ndarray | None:
     return None if v is None else np.asarray(v)
 
@@ -67,7 +91,7 @@ def _draw_text(tab: tk.Widget | None, text: str) -> None:
     lbl.pack(fill="both", expand=True)
 
 
-def _draw_figure(tab: tk.Widget | None, fig: Figure) -> None:
+def _draw_figure(tab: tk.Widget | None, fig: Any) -> None:
     if tab is None:
         return
     _clear_tab(tab)
