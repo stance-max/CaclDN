@@ -149,6 +149,12 @@ def calculate_dn2_sections(
         "diff": diff_result,
     }
 
+    # Метаданные в CalculationScalars.
+    data_manager.set_calc_param("dn2_points", int(th.size))
+    data_manager.set_calc_param("dn2_use_scanpattern", bool(use_scan_pattern))
+    data_manager.set_calc_param("dn2_sum_ready", bool(sum_result is not None))
+    data_manager.set_calc_param("dn2_diff_ready", bool(diff_result is not None))
+
     # Ключевые массивы сохраняем в CalculationArrays.
     data_manager.set_calc_array("dn2_angles_deg", th)
 

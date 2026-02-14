@@ -116,6 +116,10 @@ def calculate_afr(data_manager: DataManager, *, random_seed: int | None = None) 
         "phase_type": afr.phase_type.value,
         "array_m": {"nx": nx, "ny": ny, "dx": dx, "dy": dy, "xb": xb, "yb": yb, "nxb": nxb, "nyb": nyb},
     }
+    data_manager.set_calc_param("afr_phase_quant_step_deg", float(PHASE_QUANT_STEP_DEG))
+    data_manager.set_calc_param("afr_nx", int(nx))
+    data_manager.set_calc_param("afr_ny", int(ny))
+
     data_manager.set_result("afr", result)
     data_manager.set("afr_result", result)
 

@@ -16,6 +16,7 @@ def calculate_pch(data_manager: DataManager) -> Dict[str, Any]:
 
     if not plots.open_pch:
         res = {"enabled": False}
+        data_manager.set_calc_param("pch_enabled", False)
         data_manager.set_result("pch", res)
         return res
 
@@ -68,6 +69,14 @@ def calculate_pch(data_manager: DataManager) -> Dict[str, Any]:
     data_manager.set_calc_array("pch_nakl", phx)
     data_manager.set_calc_array("pch_fi_v_deg", fi_v_deg)
     data_manager.set_calc_array("pch_vert", phy)
+
+    data_manager.set_calc_param("pch_enabled", True)
+    data_manager.set_calc_param("pch_krut_phx", float(krutx0))
+    data_manager.set_calc_param("pch_krut_phy", float(kruty0))
+    data_manager.set_calc_param("pch_delta_phx", float(delta_phx))
+    data_manager.set_calc_param("pch_delta_phy", float(delta_phy))
+    data_manager.set_calc_param("pch_points_n", int(fi_n_deg.size))
+    data_manager.set_calc_param("pch_points_v", int(fi_v_deg.size))
 
     res = {
         "enabled": True,

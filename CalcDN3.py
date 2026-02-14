@@ -30,6 +30,7 @@ def calculate_dn3(data_manager: DataManager, *, chunk_size: int = 4096) -> Dict[
     ca = st.calc_arrays
 
     if not plots.open_3d:
+        data_manager.set_calc_param("dn3_enabled", False)
         data_manager.set_result("dn3", {"enabled": False})
         return {"enabled": False}
 
@@ -95,6 +96,16 @@ def calculate_dn3(data_manager: DataManager, *, chunk_size: int = 4096) -> Dict[
         rz_lin = np.abs(_beamform_points(query, x_flat, y_flat, w_ry, k, chunk_size=chunk_size)).reshape(x.shape)
         rz_use = rz_lin * k3d if use_scan else rz_lin
         rz_el_db = _to_db(rz_use / norm_base)
+
+    # Метаданные в CalculationScalars
+    data_manager.set_calc_param("dn3_enabled", True)
+    data_manager.set_calc_param("dn3_use_scanpattern", bool(use_scan))
+    data_manager.set_calc_param("dn3_step_3d", float(step3d))
+    data_manager.set_calc_param("dn3_grid_m", int(m))
+    data_manager.set_calc_param("dn3_grid_n", int(m))
+    data_manager.set_calc_param("dn3_sum_ready", bool(sum_db is not None))
+    data_manager.set_calc_param("dn3_rz_az_ready", bool(rz_az_db is not None))
+    data_manager.set_calc_param("dn3_rz_el_ready", bool(rz_el_db is not None))
 
     # Сохранение ключевых массивов в CalculationArrays
     data_manager.set_calc_array("dn3_x_deg", x_deg)

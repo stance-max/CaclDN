@@ -53,6 +53,9 @@ def calculate_coordinate_grid(data_manager: DataManager) -> Tuple[np.ndarray, np
 
     data_manager.set_calc_array("xkord", xkord)
     data_manager.set_calc_array("ykord", ykord)
+    data_manager.set_calc_param("coordinates_imported", bool(imported_x and imported_y))
+    data_manager.set_calc_param("coordinates_nx", int(nx))
+    data_manager.set_calc_param("coordinates_ny", int(ny))
     data_manager.set_result(
         "coordinates",
         {

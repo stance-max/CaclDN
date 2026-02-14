@@ -47,6 +47,9 @@ def import_scan_pattern(data_manager: DataManager, *, base_dir: str | Path = "."
         },
     )
     data_manager.set_calc_array("scan_pattern_raw", table)
+    data_manager.set_calc_param("scan_pattern_loaded", True)
+    data_manager.set_calc_param("scan_pattern_rows", int(table.shape[0]))
+    data_manager.set_calc_param("scan_pattern_cols", int(table.shape[1]))
     data_manager.set_result(
         "scan_pattern",
         {

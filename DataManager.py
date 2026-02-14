@@ -259,10 +259,25 @@ class PlotFlags:
 
     
 @dataclass(slots=True)
-class ParameterScalars:
-    """Сводные числовые параметры расчётов (float/int) для удобной навигации."""
+class CalculationScalars:
+    """Сводные числовые параметры расчётов (float/int/bool) для удобной навигации."""
+
+    # AFR / coordinates / import
+    afr_phase_quant_step_deg: float = float("nan")
+    afr_nx: int = 0
+    afr_ny: int = 0
+    coordinates_imported: bool = False
+    coordinates_nx: int = 0
+    coordinates_ny: int = 0
+    scan_pattern_loaded: bool = False
+    scan_pattern_rows: int = 0
+    scan_pattern_cols: int = 0
 
     # 2D DN XOZ
+    dn2_points: int = 0
+    dn2_use_scanpattern: bool = False
+    dn2_sum_ready: bool = False
+    dn2_diff_ready: bool = False
     knd_x_db: float = float("nan")
     width_x_deg: float = float("nan")
     ubl_x_db: float = float("nan")
@@ -291,7 +306,24 @@ class ParameterScalars:
     pel_diff_y_deg: float = float("nan")
     pel_diff_y_db: float = float("nan")
 
+    # ПХ
+    pch_enabled: bool = False
+    pch_krut_phx: float = float("nan")
+    pch_krut_phy: float = float("nan")
+    pch_delta_phx: float = float("nan")
+    pch_delta_phy: float = float("nan")
+    pch_points_n: int = 0
+    pch_points_v: int = 0
+
     # 3D DN
+    dn3_enabled: bool = False
+    dn3_use_scanpattern: bool = False
+    dn3_step_3d: float = float("nan")
+    dn3_grid_m: int = 0
+    dn3_grid_n: int = 0
+    dn3_sum_ready: bool = False
+    dn3_rz_az_ready: bool = False
+    dn3_rz_el_ready: bool = False
     knd_3d_db: float = float("nan")
     width_3d_x_deg: float = float("nan")
     width_3d_y_deg: float = float("nan")
@@ -319,7 +351,7 @@ class AppState:
     afr: AFRParameters = field(default_factory=AFRParameters)
     plots: PlotFlags = field(default_factory=PlotFlags)
     calc_arrays: CalculationArrays = field(default_factory=CalculationArrays)
-    calc_params: ParameterScalars = field(default_factory=ParameterScalars)
+    calc_params: CalculationScalars = field(default_factory=CalculationScalars)
     results: Dict[str, Any] = field(default_factory=dict)
     runtime: Dict[str, Any] = field(default_factory=dict)
 
@@ -505,7 +537,7 @@ class DataManager:
             afr=_afr_from_dict(state_raw.get("afr", {})),
             plots=_plots_from_dict(state_raw.get("plots", {})),
             calc_arrays=CalculationArrays(**state_raw.get("calc_arrays", {})),
-            calc_params=ParameterScalars(**state_raw.get("calc_params", {})),
+            calc_params=CalculationScalars(**state_raw.get("calc_params", {})),
             results=state_raw.get("results", {}),
             runtime=state_raw.get("runtime", {}),
         )
