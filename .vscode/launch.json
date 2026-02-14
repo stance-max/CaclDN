@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: OpenCalcDn",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/OpenCalcDn.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    }
+  ]
+}
