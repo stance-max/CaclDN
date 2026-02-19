@@ -26,7 +26,7 @@ class CalcDnGUI:
     def __init__(self, data_manager: DataManager) -> None:
         self.dm = data_manager
         self.root = tk.Tk()
-        self.root.title("Калькулятор ДН")
+        self.root.title("Калькулятор ДН АФАР")
         self.root.geometry("1200x800")
         self.root.resizable(False, False)
 
