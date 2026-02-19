@@ -151,22 +151,86 @@ class CalcDnGUI:
         ttk.Button(lf, text="Применить", command=self._apply_state).place(x=10, y=180, width=120)
 
     # ---------------------- controls helpers ----------------------
-    def _add_entry(self, parent: ttk.Frame, label: str, key: str, value: object, x: int, y: int) -> None:
-        ttk.Label(parent, text=label).place(x=x, y=y)
+    def _add_entry(
+        self,
+        parent: ttk.Frame,
+        label: str,
+        key: str,
+        value: object,
+        x: int,
+        y: int,
+        text_width: int = 80,
+        text_height: int = 24,
+        active_width: int = 130,
+        active_height: int = 24,
+    ) -> None:
+        ttk.Label(parent, text=label).place(x=x, y=y, width=text_width, height=text_height)
         v = tk.StringVar(value=str(value))
         self.vars[key] = v
-        ttk.Entry(parent, textvariable=v, width=16).place(x=x + 80, y=y)
+        ttk.Entry(parent, textvariable=v).place(
+            x=x + text_width,
+            y=y,
+            width=active_width,
+            height=active_height,
+        )
 
-    def _add_combo(self, parent: ttk.Frame, label: str, key: str, values: list[str], value: str, x: int, y: int) -> None:
-        ttk.Label(parent, text=label).place(x=x, y=y)
+    def _add_combo(
+        self,
+        parent: ttk.Frame,
+        label: str,
+        key: str,
+        values: list[str],
+        value: str,
+        x: int,
+        y: int,
+        text_width: int = 80,
+        text_height: int = 24,
+        active_width: int = 150,
+        active_height: int = 24,
+    ) -> None:
+        ttk.Label(parent, text=label).place(x=x, y=y, width=text_width, height=text_height)
         v = tk.StringVar(value=value)
         self.vars[key] = v
-        ttk.Combobox(parent, textvariable=v, values=values, width=18, state="readonly").place(x=x + 80, y=y)
+        ttk.Combobox(parent, textvariable=v, values=values, state="readonly").place(
+            x=x + text_width,
+            y=y,
+            width=active_width,
+            height=active_height,
+        )
 
-    def _add_check(self, parent: ttk.Frame, label: str, key: str, value: bool, x: int, y: int) -> None:
+    def _add_check(
+        self,
+        parent: ttk.Frame,
+        label: str,
+        key: str,
+        value: bool,
+        x: int,
+        y: int,
+        text_width: int = 140,
+        text_height: int = 24,
+        active_width: int = 24,
+        active_height: int = 24,
+    ) -> None:
+        ttk.Label(parent, text=label).place(x=x, y=y, width=text_width, height=text_height)
         v = tk.BooleanVar(value=bool(value))
         self.vars[key] = v
-        ttk.Checkbutton(parent, text=label, variable=v).place(x=x, y=y)
+        ttk.Checkbutton(parent, text="", variable=v).place(
+            x=x + text_width,
+            y=y,
+            width=active_width,
+            height=active_height,
+        )
+
+    def _add_text(
+        self,
+        parent: ttk.Frame,
+        text: str,
+        x: int,
+        y: int,
+        text_width: int = 160,
+        text_height: int = 24,
+    ) -> None:
+        ttk.Label(parent, text=text).place(x=x, y=y, width=text_width, height=text_height)
 
     # ---------------------- actions ----------------------
     def _apply_state(self) -> None:
