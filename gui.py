@@ -26,7 +26,7 @@ class CalcDnGUI:
     def __init__(self, data_manager: DataManager) -> None:
         self.dm = data_manager
         self.root = tk.Tk()
-        self.root.title("CalcDN_new")
+        self.root.title("Калькулятор ДН")
         self.root.geometry("1200x800")
         self.root.resizable(False, False)
 
@@ -42,9 +42,9 @@ class CalcDnGUI:
     # -------------------------- build --------------------------
     def _build_menu(self) -> None:
         m = tk.Menu(self.root)
-        m.add_command(label="Старт", command=self._on_start)
-        m.add_command(label="Сохранить", command=self._on_save)
+        m.add_command(label="Расчет", command=self._on_start)
         m.add_command(label="Очистить", command=self._on_clear)
+        m.add_command(label="Сохранить", command=self._on_save)
         self.root.config(menu=m)
 
     def _build_tabs(self) -> None:
@@ -83,7 +83,8 @@ class CalcDnGUI:
         lf = ttk.LabelFrame(parent, text="Параметры решетки")
         lf.place(x=10, y=10, width=560, height=220)
 
-        self._add_combo(lf, "Тип сетки", "array.grid_type", [g.value for g in GridType], st.grid_type.value, 10, 10)
+        self._add_combo(lf, "Тип сетки:", "array.grid_type", [g.value for g in GridType], st.grid_type.value, 10, 10)
+        self._add_entry(lf, "Литер:", "array.liter", st.liter, 370, 10)
         self._add_entry(lf, "Nx", "array.nxe", st.nxe, 10, 45)
         self._add_entry(lf, "Ny", "array.nye", st.nye, 190, 45)
         self._add_entry(lf, "dx (м)", "array.dx", st.dx, 10, 80)
@@ -92,7 +93,8 @@ class CalcDnGUI:
         self._add_entry(lf, "Nyb", "array.nyb", st.nyb, 190, 115)
         self._add_entry(lf, "xb (м)", "array.xb", st.xb, 10, 150)
         self._add_entry(lf, "yb (м)", "array.yb", st.yb, 190, 150)
-        self._add_entry(lf, "Литера", "array.liter", st.liter, 370, 45)
+        self._add_check(lf, "xkord imported", "afr.xkord_imported", st.xkord_imported, 10, 175)
+        self._add_check(lf, "ykord imported", "afr.ykord_imported", st.ykord_imported, 190, 175)
 
     def _build_pattern_panel(self, parent: ttk.Frame) -> None:
         st = self.dm.state.pattern
@@ -130,12 +132,12 @@ class CalcDnGUI:
         self._add_entry(lf, "FR dop2", "afr.fr_dop2", st.fr_dop2, 190, 115)
 
         self._add_check(lf, "mask imported", "afr.mask_imported", st.mask_imported, 10, 150)
-        self._add_check(lf, "xkord imported", "afr.xkord_imported", st.xkord_imported, 10, 175)
-        self._add_check(lf, "ykord imported", "afr.ykord_imported", st.ykord_imported, 190, 175)
+        #self._add_check(lf, "xkord imported", "afr.xkord_imported", st.xkord_imported, 10, 175)
+        #self._add_check(lf, "ykord imported", "afr.ykord_imported", st.ykord_imported, 190, 175)
 
     def _build_flags_panel(self, parent: ttk.Frame) -> None:
         st = self.dm.state.plots
-        lf = ttk.LabelFrame(parent, text="Настройки/флаги расчета")
+        lf = ttk.LabelFrame(parent, text="Настройки расчета")
         lf.place(x=580, y=240, width=610, height=240)
 
         self._add_check(lf, "2D ДН", "plots.open_2d", st.open_2d, 10, 10)

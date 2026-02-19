@@ -29,8 +29,8 @@ from typing import Any, Callable, Dict, List, MutableMapping, Optional
 class GridType(str, Enum):
     "Тип геометрии расположения излучателей"
 
-    RECTANGULAR = "rectangular"  # Прямоугольная сетка
-    HEXAGONAL = "hexagonal"      # Гексагональная сетка
+    RECTANGULAR = "прямоугольная"  # Прямоугольная сетка
+    HEXAGONAL = "гексоганальная"      # Гексагональная сетка
 
 
 class ScanPatternType(str, Enum):
@@ -65,6 +65,11 @@ class ArrayParameters:
     wavelength_mm: float = field(default=0.0)  # Длина волны (мм)
     wave_k: float = field(default=0.0)         # Волновое число k=2π/λ (рад/м)
 
+        # ---- Координаты излучалей ----
+    xkord_imported: bool = False
+    ykord_imported: bool = False
+    xkord_file_path: str = ""
+    ykord_file_path: str = ""
     def __post_init__(self) -> None:
         # Формулы перенесены из MATLAB CalcDN.m:
         # freq = (6.5 + (lit-1)*2.01) * 10^9
@@ -90,7 +95,7 @@ class PatternParameters:
     step_2d: float = 0.1
     step_3d: float = 0.1
     alpha: float = 0.0 # Сечение, град
-
+        
     # ---- Импорт диаграммы сканирования (DNscan.m) ----
     scan_pattern_type: ScanPatternType = ScanPatternType.AUTO
     scan_pattern_loaded: bool = False
@@ -105,35 +110,35 @@ class PatternParameters:
 class ARType(str, Enum):
     "Тип амплитудного распределения (АР) в соответствии с ChoseAR.m."
 
-    UNIFORM = "uniform"                  # 1) Равномерное
-    COS_ON_PEDESTAL = "cos_on_pedestal"  # 2) cos на пьедестале
-    DOLPH_CHEBYSHEV = "dolph_chebyshev"  # 3) Дольф-Чебышев
-    HANN = "hann"                        # 4) Окно Ханна
-    HAMMING = "hamming"                  # 5) Окно Хэмминга
-    BLACKMAN = "blackman"                # 6) Окно Блэкмана
-    KAISER = "kaiser"                    # 7) Окно Кайзера
-    FROM_FILE = "from_file"              # 8) Из файла
+    UNIFORM = "Равномерное"                     # 1) Равномерное
+    COS_ON_PEDESTAL = "cos на пьедестале"       # 2) cos на пьедестале
+    DOLPH_CHEBYSHEV = "Дольф-Чебышев"           # 3) Дольф-Чебышев
+    HANN = "Окно Ханна"                         # 4) Окно Ханна
+    HAMMING = "Окно Хэмминга"                   # 5) Окно Хэмминга
+    BLACKMAN = "Окно Блэкмана"                  # 6) Окно Блэкмана
+    KAISER = "Окно Кайзера"                     # 7) Окно Кайзера
+    FROM_FILE = "Из файла"                      # 8) Из файла
 
 
 class PRType(str, Enum):
     """Тип фазового распределения (ФР) в соответствии с ChoseFR.m."""
 
-    UNIFORM = "uniform"                # 1) Равномерное
-    CIRCULAR = "circular"              # 2) Круговое
-    PYRAMIDAL = "pyramidal"            # 3) Пирамидальное
-    SPHERICAL = "spherical"            # 4) Сферическое
-    QUASI_FIBONACCI = "quasi_fibonacci"  # 5) Квазифибоначчи
-    QUADRATIC = "quadratic"            # 6) Квадратическое
-    PRIME_NUMBERS = "prime_numbers"    # 7) Простые числа
-    FROM_FILE = "from_file"            # 8) Из файла
+    UNIFORM = "Равномерное"                 # 1) Равномерное
+    CIRCULAR = "Круговое"                   # 2) Круговое
+    PYRAMIDAL = "Пирамидальное"             # 3) Пирамидальное
+    SPHERICAL = "Сферическое"               # 4) Сферическое
+    QUASI_FIBONACCI = "Квазифибоначчи"      # 5) Квазифибоначчи
+    QUADRATIC = "Квадратическое"            # 6) Квадратическое
+    PRIME_NUMBERS = "Простые числа"         # 7) Простые числа
+    FROM_FILE = "Из файла"                  # 8) Из файла
 
 
 class MaskType(str, Enum):
     """Тип маски включения излучателей (AFR.m -> ChMask)."""
 
-    FULL = "full"            # 1) Все полотно
-    IMPORTED = "imported"    # 2) Импортированная маска
-    ROCKET = "rocket"        # 3) 64 центральных БП (ракетный луч)
+    FULL = "Все каналы вкл."            # 1) Все полотно
+    IMPORTED = "Из файла"               # 2) Импортированная маска
+    ROCKET = "Ракетный луч"             # 3) 64 центральных БП (ракетный луч)
 
 
 @dataclass
@@ -155,13 +160,9 @@ class AFRParameters:
     phase_type: PRType = PRType.UNIFORM
     mask_type: MaskType = MaskType.FULL
 
-    # ---- Флаги и пути импортируемых массивов (обновляются импортёром) ----
+    # ---- Флаги и пути импортируемой маски каналов (обновляются импортёром) ----
     mask_imported: bool = False
-    xkord_imported: bool = False
-    ykord_imported: bool = False
     mask_file_path: str = ""
-    xkord_file_path: str = ""
-    ykord_file_path: str = ""
     
         # ---- Универсальные "доп" параметры GUI ----
     # ARdop из ChoseAR.m: один параметр, смысл зависит от amplitude_type:
