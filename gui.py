@@ -83,16 +83,16 @@ class CalcDnGUI:
         lf = ttk.LabelFrame(parent, text="Параметры решетки")
         lf.place(x=10, y=10, width=560, height=220)
 
-        self._add_combo(lf, "Тип сетки:", "array.grid_type", [g.value for g in GridType], st.grid_type.value, 10, 10)
-        self._add_entry(lf, "Литер:", "array.liter", st.liter, 370, 10)
-        self._add_entry(lf, "Nx", "array.nxe", st.nxe, 10, 45)
-        self._add_entry(lf, "Ny", "array.nye", st.nye, 190, 45)
-        self._add_entry(lf, "dx (м)", "array.dx", st.dx, 10, 80)
-        self._add_entry(lf, "dy (м)", "array.dy", st.dy, 190, 80)
-        self._add_entry(lf, "Nxb", "array.nxb", st.nxb, 10, 115)
-        self._add_entry(lf, "Nyb", "array.nyb", st.nyb, 190, 115)
-        self._add_entry(lf, "xb (м)", "array.xb", st.xb, 10, 150)
-        self._add_entry(lf, "yb (м)", "array.yb", st.yb, 190, 150)
+        self._add_combo(lf, "Тип сетки:", "array.grid_type", [g.value for g in GridType], st.grid_type.value, 5, 5, 60, 22, 110, 22, 2)
+        self._add_entry(lf, "Литер:", "array.liter", st.liter, 190, 5, 40, 22, 100, 22, 2)
+        self._add_entry(lf, "Каналы OX, шт:", "array.nxe", st.nxe, 5, 45)
+        self._add_entry(lf, "Каналы OY, шт", "array.nye", st.nye, 190, 45)
+        self._add_entry(lf, "Шаг OX, м:", "array.dx", st.dx, 5, 80)
+        self._add_entry(lf, "Шаг OY, м:", "array.dy", st.dy, 190, 80)
+        self._add_entry(lf, "Балки OX, шт:", "array.nxb", st.nxb, 5, 115)
+        self._add_entry(lf, "Балки OX, шт:", "array.nyb", st.nyb, 190, 115)
+        self._add_entry(lf, "Шир.балк OX, м:", "array.xb", st.xb, 5, 150)
+        self._add_entry(lf, "Шир.балк OY, м:", "array.yb", st.yb, 190, 150,)
         self._add_check(lf, "xkord imported", "afr.xkord_imported", st.xkord_imported, 10, 175)
         self._add_check(lf, "ykord imported", "afr.ykord_imported", st.ykord_imported, 190, 175)
 
@@ -151,22 +151,121 @@ class CalcDnGUI:
         ttk.Button(lf, text="Применить", command=self._apply_state).place(x=10, y=180, width=120)
 
     # ---------------------- controls helpers ----------------------
-    def _add_entry(self, parent: ttk.Frame, label: str, key: str, value: object, x: int, y: int) -> None:
-        ttk.Label(parent, text=label).place(x=x, y=y)
+    def _place_labeled_control(
+        self,
+        parent: ttk.Frame,
+        label: str,
+        x: int,
+        y: int,
+        *,
+        label_width: int,
+        label_height: int,
+        spacing: int,
+    ) -> tuple[ttk.Label, int]:
+        lbl = ttk.Label(parent, text=label)
+        lbl.place(x=x, y=y, width=label_width, height=label_height)
+        control_x = x + label_width + spacing
+        return lbl, control_x
+
+    def _add_entry(
+        self,
+        parent: ttk.Frame,
+        label: str,
+        key: str,
+        value: object,
+        x: int,
+        y: int,
+        label_width: int = 80,
+        label_height: int = 22,
+        control_width: int = 120,
+        control_height: int = 22,
+        spacing: int = 0,
+    ) -> None:
+        _, control_x = self._place_labeled_control(
+            parent,
+            label,
+            x,
+            y,
+            label_width=label_width,
+            label_height=label_height,
+            spacing=spacing,
+        )
         v = tk.StringVar(value=str(value))
         self.vars[key] = v
-        ttk.Entry(parent, textvariable=v, width=16).place(x=x + 80, y=y)
+        ttk.Entry(parent, textvariable=v).place(x=control_x, y=y, width=control_width, height=control_height)
 
-    def _add_combo(self, parent: ttk.Frame, label: str, key: str, values: list[str], value: str, x: int, y: int) -> None:
-        ttk.Label(parent, text=label).place(x=x, y=y)
+    def _add_combo(
+        self,
+        parent: ttk.Frame,
+        label: str,
+        key: str,
+        values: list[str],
+        value: str,
+        x: int,
+        y: int,
+        label_width: int = 80,
+        label_height: int = 22,
+        control_width: int = 140,
+        control_height: int = 22,
+        spacing: int = 0,
+    ) -> None:
+        _, control_x = self._place_labeled_control(
+            parent,
+            label,
+            x,
+            y,
+            label_width=label_width,
+            label_height=label_height,
+            spacing=spacing,
+        )
         v = tk.StringVar(value=value)
         self.vars[key] = v
-        ttk.Combobox(parent, textvariable=v, values=values, width=18, state="readonly").place(x=x + 80, y=y)
+        ttk.Combobox(parent, textvariable=v, values=values, state="readonly").place(
+            x=control_x,
+            y=y,
+            width=control_width,
+            height=control_height,
+        )
 
-    def _add_check(self, parent: ttk.Frame, label: str, key: str, value: bool, x: int, y: int) -> None:
+    def _add_check(
+        self,
+        parent: ttk.Frame,
+        label: str,
+        key: str,
+        value: bool,
+        x: int,
+        y: int,
+        label_width: int = 160,
+        label_height: int = 22,
+        control_width: int = 22,
+        control_height: int = 22,
+        spacing: int = 0,
+    ) -> None:
+        lbl, control_x = self._place_labeled_control(
+            parent,
+            label,
+            x,
+            y,
+            label_width=label_width,
+            label_height=label_height,
+            spacing=spacing,
+        )
         v = tk.BooleanVar(value=bool(value))
         self.vars[key] = v
-        ttk.Checkbutton(parent, text=label, variable=v).place(x=x, y=y)
+        check = ttk.Checkbutton(parent, variable=v)
+        check.place(x=control_x, y=y, width=control_width, height=control_height)
+        lbl.bind("<Button-1>", lambda _event, var=v: var.set(not var.get()))
+
+    def _add_text(
+        self,
+        parent: ttk.Frame,
+        text: str,
+        x: int,
+        y: int,
+        width: int = 120,
+        height: int = 22,
+    ) -> None:
+        ttk.Label(parent, text=text).place(x=x, y=y, width=width, height=height)
 
     # ---------------------- actions ----------------------
     def _apply_state(self) -> None:

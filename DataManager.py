@@ -66,6 +66,7 @@ class ArrayParameters:
     wave_k: float = field(default=0.0)         # Волновое число k=2π/λ (рад/м)
 
         # ---- Координаты излучалей ----
+    kord_imported: bool = False
     xkord_imported: bool = False
     ykord_imported: bool = False
     xkord_file_path: str = ""
